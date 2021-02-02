@@ -1,10 +1,25 @@
+// SPDX-License-Identifier: CPOL-1.02З
 #include "main.h"
+
+const char *server_cmd_strings[CMD_COUNT] = { //Команды, выполняемые на сервере
+    "/getrooms",    //Получение списка комнат.      Синтаксис: /getrooms.
+    "/sendmessage", //Отправка сообщения на сервер. Синтаксис: /sendmessage <room> <nickname> <message>
+    "/getnewmessages"  //Получение новых сообщений с сервера. Синтаксис: /getnewmessages <room> <number> (number - количество уже имеющихся сообщений)
+};  //Команды для взаимодействия клиент - сервер
+int (*server_cmd_functions[CMD_COUNT])(int, char**) = {  //Соответствующие им функции сервера
+    get_rooms_server,
+    send_message_server,
+    get_new_messages_server
+};
+
+char* rooms[MAXROOMS];	//Названия комнат
+int room_fd[MAXROOMS];	//Файловые дескрипторы комнат
+int room_number[MAXROOMS];	//Количество сообщений в комнатах
+int room_count;	//Количество комнат
+
 
 int main(int argc, char* argv[])
 {
-    
-
-    
     char* config_file;
     short is_server; 
     char ipaddr[MAXIPLEN+1];
@@ -110,6 +125,84 @@ int get_string(char *buf, int maxlen, int fd)
         }
     }
     return i;
+}
+
+int goto_message(int room, int count)	//Перемещение позиции в файле к count сообщению с конца
+{
+	char buf[MAXBUFFER];
+    long pos;
+	lseek(room, -SIZEOF_MAXLENGTH, SEEK_END); //Чтение позиции предыдущего сообщения
+	for (int i = 0; i < count; i++) 	//TODO - добавить проверку на выход за файл
+	{
+		read(room, buf, SIZEOF_MAXLENGTH);
+		buf[SIZEOF_MAXLENGTH] = '\0';
+		//printf("%s, ", buf);
+		int offset = atoi(buf);
+		if (offset < 0)
+			offset = 0;
+		pos = lseek(room, offset, SEEK_SET);
+	}
+    if (pos > 0)
+	    lseek(room, SIZEOF_MAXLENGTH, SEEK_CUR);
+}
+
+int read_messages(int room)	//Вывод всех сообщений (ВНИМАНИЕ: смещение в файле не меняется, перед чтением позиция должна находиться либо в начале файла, либо после позиции сообщения, предшествующего первому считываемому)
+{
+        printf("Вывод истории сообщений\n");
+	char buf[MAXBUFFER];
+	int size;
+	for (int i = 0; ; i++)
+	{	
+		for (int j = 0; j < 4; j++)	//Чтение сообщений состоит из четырех частей
+		{
+			buf[MAXBUFFER-1] = '\0';
+			for (size = 0; size < MAXBUFFER-1; size++)
+			{
+				if (read(room, buf+size, 1) != 1)
+				{
+					return i;
+				}
+				if (buf[size] == '\0')
+					break;
+			}
+			switch (j)
+			{
+				case 0:
+				printf(RED"%s\n", buf);
+				break;
+				case 1:
+				printf(DIM WHITE"%s\n", buf);
+				break;
+				case 2:
+				printf(DEFAULT BRIGHT" %s\n", buf);
+				break;
+				case 3:
+				printf(DEFAULT"%s\n\n", buf);
+			}
+		}
+		lseek(room, SIZEOF_MAXLENGTH, SEEK_CUR);
+	}	
+}
+
+int write_message(int room, char* datetime, char* nickname, char* msg, int number)	//Запись сообщения в историю
+{
+	/*	Хранение истории происходит в следующем формате:
+	<1> - номер сообщения
+	<01/02/2003> - дата и время отправления
+	<Alice> - никнейм отправителя
+	<Hello, world> - сообщение
+	<Позиция> - указывает на предыдущую позицию (т.е. перед номером текущего сообщения)
+	*/
+	//Запись номера
+	char buf[MAXBUFFER];
+	int pos = lseek(room, 0, SEEK_END);
+	snprintf(buf, MAXBUFFER, "%i", number);
+	write(room, buf, strlen(buf)+1);
+	write(room, datetime, strlen(datetime)+1);
+	write(room, nickname, strlen(nickname)+1);
+	write(room, msg, strlen(msg)+1);
+	snprintf(buf, MAXBUFFER, "%08i", pos - SIZEOF_MAXLENGTH);	//TODO - заменить 8 на SIZEOF
+	write(room, buf, SIZEOF_MAXLENGTH);
 }
 
     /*

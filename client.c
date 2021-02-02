@@ -4,12 +4,11 @@
 int client(int sock, char* nickname)
 {
     room_fd[0] = open("test_history", O_RDWR);
-    room_number[0] = 0;//read_messages(room_fd[0]);
-
-    printf("Выберите комнату из списка: \n");
-    get_new_messages_client(sock, 0, 0);
-    //lseek(room_fd[0], 0, SEEK_SET);
-    //read_messages(room_fd[0]);
+    room_number[0] = read_messages(room_fd[0]);
+    //printf("Выберите комнату из списка: \n");
+    get_new_messages_client(sock, 0, room_number[0]);
+    lseek(room_fd[0], 0, SEEK_SET);
+    read_messages(room_fd[0]);
     //get_rooms_client(sock);
     //send_message_client(sock, 0, "SmirnuX", "Hello, world");
 
@@ -58,23 +57,21 @@ int get_new_messages_client(int sock, int room, int count)  //Получение
     send_message(sock, buf);
     //Прием количества сообщений
     int target_count = atoi(get_message(sock, buf));
-    printf("%i", target_count);
-    close(sock);
     //Прием сообщений
     for(int i = count; i<target_count; i++)
     {
         char s_time[MAXBUFFER], nickname[MAXBUFFER], buf[MAXBUFFER];
 	    //Получение даты и времени
 	    get_message(sock, s_time);
-    	printf(DEFAULT BRIGHT"date %s\n",s_time);
+    	//printf(DEFAULT BRIGHT"%s\n",s_time);
 	    //Получение никнейма
 	    get_message(sock, nickname);
-    	printf(DEFAULT BRIGHT"nick %s\n", nickname);
+    	//printf(DEFAULT BRIGHT" %s\n", nickname);
 	    //Получение сообщения
     	get_message(sock, buf);
-    	printf(DEFAULT"msg %s\n\n", buf);
+    	//printf(DEFAULT"%s\n\n", buf);
         //Запись сообщения в файл
-    	//write_message(room_fd[room], s_time, nickname, buf, ++room_number[room]);   
+    	write_message(room_fd[room], s_time, nickname, buf, ++room_number[room]);   
     }
 }
 

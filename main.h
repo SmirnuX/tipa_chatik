@@ -52,9 +52,9 @@ extern int room_count;	//Количество комнат
 //Структура сообщения
 struct message
 {
-    char* datetime;
-    char* nickname;
-    char* msg_text;
+    char datetime[MAXBUFFER];
+    char nickname[MAXBUFFER];   //TODO - динамически
+    char msg_text[MAXBUFFER];
 };
 
 //Команды, выполняемые на сервере
@@ -74,5 +74,6 @@ int get_string(char* buf, int maxlen, int fd);
 int send_message(int socket, char* str);
 char* get_message(int socket, char* str);
 int read_messages(int room);	//Вывод всех сообщений, начиная с установленной ранее позици в файле
+int read_single_message(int room, struct message* msg);
 int write_message(int room, char* datetime, char* nickname, char* msg, int number); //Запись сообщения в файл
 int goto_message(int room, int count);  //Перемещение позиции в файле к count сообщению с конца

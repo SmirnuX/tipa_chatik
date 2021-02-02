@@ -148,6 +148,7 @@ int goto_message(int room, int count)	//Перемещение позиции в
 
 int read_messages(int room)	//Вывод всех сообщений (ВНИМАНИЕ: смещение в файле не меняется, перед чтением позиция должна находиться либо в начале файла, либо после позиции сообщения, предшествующего первому считываемому)
 {
+    //TODO - поменять через несколько read_single_message(room_fd[room], &msg);
         printf("Вывод истории сообщений\n");
 	char buf[MAXBUFFER];
 	int size;
@@ -182,6 +183,39 @@ int read_messages(int room)	//Вывод всех сообщений (ВНИМА
 		}
 		lseek(room, SIZEOF_MAXLENGTH, SEEK_CUR);
 	}	
+}
+
+int read_single_message(int room, struct message* msg)
+{
+    char buf[MAXBUFFER];
+	int size;
+    for (int j = 0; j < 4; j++)	//Чтение сообщений состоит из четырех частей
+    {
+        buf[MAXBUFFER-1] = '\0';
+        for (size = 0; size < MAXBUFFER-1; size++)
+        {
+            if (read(room, buf+size, 1) != 1)
+            {
+                return 1;
+            }
+            if (buf[size] == '\0')
+                break;
+        }
+        switch (j)
+        {
+            case 1:
+            strncpy(msg->datetime, buf, strlen(buf)+1);
+            break;
+            case 2:
+            strncpy(msg->nickname, buf, strlen(buf)+1);
+            break;
+            case 3:
+            strncpy(msg->msg_text, buf, strlen(buf)+1);
+            break;
+        }
+    }
+    lseek(room, SIZEOF_MAXLENGTH, SEEK_CUR);    //Пропуск позиции
+    return 0;
 }
 
 int write_message(int room, char* datetime, char* nickname, char* msg, int number)	//Запись сообщения в историю

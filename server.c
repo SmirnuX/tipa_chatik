@@ -47,14 +47,14 @@ int server(int server_socket, char* nickname)
 		char buf[MAXBUFFER];
 		//Получение команды
 		get_message(client_socket, buf);
-		printf("Принято %s", buf);
+		printf("Принято %s\n", buf);
 		
 		//Идентификация команды
 		for (int i = 0; i < CMD_COUNT; i++)	
 		{
 			if (strcmp(buf, server_cmd_strings[i]) == 0)	
 			{
-				printf("Выполняется %s", buf);
+				printf("Выполняется %s\n", buf);
 				server_cmd_functions[i](client_socket, NULL);
 				break;
 			}
@@ -113,14 +113,14 @@ int get_new_messages_server(int sock, char** args)	//Отправка недос
 	{	
 		//printf("%i ", i);
 		//Считывание сообщения
-		msg.datetime = "12.02.12";
-		msg.nickname = "test";
-		msg.msg_text = "hello world";
-    	//Передача сообщений
+		read_single_message(room_fd[room], &msg);
+  	  	//Передача сообщений
+		strncpy(buf, msg.datetime, strlen(msg.datetime)+1);
+		send_message(sock, buf);
+		strncpy(buf, msg.nickname, strlen(msg.nickname)+1);
+		send_message(sock, buf);
 		strncpy(buf, msg.msg_text, strlen(msg.msg_text)+1);
 		send_message(sock, buf);
-		send_message(sock, buf);
-		printf("before %i, ", send_message(sock, buf));
 	}
 	return 1;	
 }

@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: CPOL-1.02
 #include "main.h"
 
-
-
-int server(int server_socket, char* nickname)
+int server(int server_socket, struct sockaddr* address)
 {
     room_count = 0;
 	for (int i=0; i<MAXROOMS; i++)	//TODO - проверить целесообразность выделения памяти
@@ -36,31 +34,100 @@ int server(int server_socket, char* nickname)
 		dir_ptr=readdir(directory);	//Переходим к следующему файлу
 	}
 	closedir(directory);
-    listen(server_socket, 5);
+
+	//Подготовка списка соединений
+	int connections[MAXCONNECTIONS];	//Сокеты соединений
+	fd_set connections_set;	//Набор файловых дескрипторов соединений
+	int connections_count = 0;	//Количество соединений в наборе
+	FD_ZERO(&connections_set);	//Обнуление набора
+	int max = 0;	//Максимальное значение файлового дескриптора
+	struct timeval timeout;
+	timeout.tv_usec = TIMEOUT_MS;
+	timeout.tv_sec = 5;
+
+
+    listen(server_socket, MAXQUEUE);
+	printf("Ожидание...\n");
     while (1)
     {
-        int client_socket;
-        struct sockaddr_in client_address;
-        printf("Ожидание...\n");
-        int len = sizeof(client_address);
-        client_socket = accept(server_socket, (struct sockaddr*) &client_address, &len);
-		char buf[MAXBUFFER];
-		//Получение команды
-		get_message(client_socket, buf);
-		printf("Принято %s\n", buf);
-		
-		//Идентификация команды
-		for (int i = 0; i < CMD_COUNT; i++)	
+		//Проверка уже подтвержденных соединений
+		if (connections_count > 0)
 		{
-			if (strcmp(buf, server_cmd_strings[i]) == 0)	
+			errno = 0;
+			select(max+1, &connections_set, NULL, NULL, &timeout);	
+			max = 0;
+			
+			for (int i = 0; i < connections_count; i++)	//Прогон всех соединений
 			{
-				printf("Выполняется %s\n", buf);
-				server_cmd_functions[i](client_socket, NULL);
-				break;
+				//Проверка, можно ли еще считать
+				int n = 0;
+				ioctl(connections[i], FIONREAD, &n);
+				int end_of_read = FD_ISSET(connections[i], &connections_set) && !(n==0);
+				if (end_of_read)
+				{
+					//Вычисление нового максимального значения
+					if (connections[i] > max)
+						max = connections[i];
+					//Выполнение команд для активных соединений (по одной команде на каждое соединение)
+					char buf[MAXBUFFER];
+					//Получение команды
+					get_message(connections[i], buf);
+					if (buf[0] == '\0')
+						end_of_read = 1;
+					else
+					{
+						printf("Принято %s для %i\n", buf, connections[i]);
+						//Идентификация команды
+						for (int j = 0; j < CMD_COUNT; j++)	
+						{
+							if (strcmp(buf, server_cmd_strings[j]) == 0)	
+							{
+								printf("Выполняется %s для %i\n", buf, connections[i]);
+								server_cmd_functions[j](connections[i], NULL);	//TODO - убрать аргумент char** args
+								break;
+							}
+						}
+					}
+				}
+				if (!end_of_read)
+				{
+					printf("Закрытие %i\n", connections[i]);
+					FD_CLR(connections[i], &connections_set);
+					//Неактивные сокеты закрываются
+					close(connections[i]);
+					//Сдвиг остальных соединений влево
+					for (int j = i; j < connections_count-1; j++)	
+					{
+						connections[j] = connections[j+1];
+					}
+					connections_count--;
+					i--;
+				}
 			}
 		}
-        //get_rooms_server(client_socket, NULL);
-		//send_message_server(client_socket, NULL);
+
+		if (connections_count < MAXCONNECTIONS)	//Попытка добавить новое соединение из очереди			
+		{	
+			errno = 0;
+			int client_socket;
+			struct sockaddr_in client_address;
+			int len = sizeof(client_address);
+			client_socket = accept(server_socket, (struct sockaddr*) &client_address, &len);
+			if (errno == EAGAIN)
+				continue;
+			else
+			{
+				printf("Открытие %i\n", client_socket);
+				//Добавление соединения в набор
+				FD_SET(client_socket, &connections_set);
+				connections[connections_count] = client_socket;
+				if (max < client_socket)
+					max = client_socket;
+				printf("Добавлено новое соединение\n");
+				connections_count++;
+			}
+			printf("Ожидание...\n");
+		}
     }
     return 0;
 }
@@ -75,6 +142,14 @@ int get_rooms_server(int sock, char** args)	//Отправка списка ко
 		strncpy(buf, rooms[i], MAXNICKLEN);
 		send_message(sock, buf);	//Отправка названий комнат
 	}
+}
+
+int get_name_server(int sock, char** args)  //Отправка наименования сервера
+{
+    char buf[MAXNICKLEN];
+	strncpy(buf, nickname, MAXNICKLEN);
+    send_message(sock, buf);
+    return 0;
 }
 
 int send_message_server(int sock, char** args)	//Принятие сообщения сервером
@@ -126,3 +201,8 @@ int get_new_messages_server(int sock, char** args)	//Отправка недос
 }
 
 
+int ping_server(int sock, char** args)
+{
+	char buf[] = "pong";
+	send_message(sock, buf);
+}

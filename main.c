@@ -4,18 +4,23 @@
 const char *server_cmd_strings[CMD_COUNT] = { //Команды, выполняемые на сервере
     "/getrooms",    //Получение списка комнат.      Синтаксис: /getrooms.
     "/sendmessage", //Отправка сообщения на сервер. Синтаксис: /sendmessage <room> <nickname> <message>
-    "/getnewmessages"  //Получение новых сообщений с сервера. Синтаксис: /getnewmessages <room> <number> (number - количество уже имеющихся сообщений)
+    "/getnewmessages",  //Получение новых сообщений с сервера. Синтаксис: /getnewmessages <room> <number> (number - количество уже имеющихся сообщений)
+    "/getname",  //Получение наименования сервера
+    "/ping" //Команда для проверки соединения. Должна на ответ подать "pong"
 };  //Команды для взаимодействия клиент - сервер
 int (*server_cmd_functions[CMD_COUNT])(int, char**) = {  //Соответствующие им функции сервера
     get_rooms_server,
     send_message_server,
-    get_new_messages_server
+    get_new_messages_server,
+    get_name_server,
+    ping_server
 };
 
 char* rooms[MAXROOMS];	//Названия комнат
 int room_fd[MAXROOMS];	//Файловые дескрипторы комнат
 int room_number[MAXROOMS];	//Количество сообщений в комнатах
 int room_count;	//Количество комнат
+char nickname[MAXNICKLEN];  //Наименование клиента/сервера
 
 
 int main(int argc, char* argv[])
@@ -24,7 +29,6 @@ int main(int argc, char* argv[])
     short is_server; 
     char ipaddr[MAXIPLEN+1];
     int port;
-    char nickname[MAXNICKLEN+1];
 
     if (argc == 2 && strcmp(argv[1], "-s")==0)
     {
@@ -76,7 +80,10 @@ int main(int argc, char* argv[])
         if (is_server == 0)
             respond = connect(sock, (struct sockaddr *) &address, sizeof(address));
         else
+        {
+            fcntl(sock, F_SETFL, O_NONBLOCK);
             respond = bind(sock, (struct sockaddr *) &address, sizeof(address));
+        }
 
         if (respond == -1)
         {
@@ -89,9 +96,9 @@ int main(int argc, char* argv[])
         } 
 
         if (is_server == 0)
-            client(sock, nickname);
+            client(sock, (struct sockaddr *) &address);
         else
-            server(sock, nickname);
+            server(sock, (struct sockaddr *) &address);
     
         break;    
     }

@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <time.h>
+#include <sys/ioctl.h>
 
 //Константы
 #define PERMISSION 0666	//Разрешения для создаваемых файлов
@@ -22,7 +23,10 @@
 #define MAXBUFFER 256   //Максимальный размер буфера (также максимальная длина сообщения)
 #define MAXROOMS 16 //Максимальное количество комнат (также максимальное количество открытых файлов)
 #define SIZEOF_MAXLENGTH 8 //Длина позиции в файле (т.е. максимальная длина файла - 10^16б > 95 Мб)
-#define CMD_COUNT 3 //Количество команд, осуществляющих интерфейс клиент-сервер
+#define CMD_COUNT 5 //Количество команд, осуществляющих интерфейс клиент-сервер
+#define MAXCONNECTIONS 5    //Количество соединений, которые могут быть открыты одновременно
+#define MAXQUEUE 5  //Максимальное количество соединений в очереди
+#define TIMEOUT_MS 400 //Частота опроса сокета в микросекундах
 
 //Файлы конфигурации
 #define server_config "configs/serverconfig"
@@ -40,14 +44,15 @@
 
 #define clear() printf("\033[H\033[J"); //очистка экрана
 
-int client(int sock, char* nickname);
-int server(int sock, char* nickname);
+int client(int sock, struct sockaddr* address);
+int server(int sock, struct sockaddr* address);
 
 //Сведения о комнатах
 extern char* rooms[MAXROOMS];	//Названия комнат
 extern int room_fd[MAXROOMS];	//Файловые дескрипторы комнат
 extern int room_number[MAXROOMS];	//Количество сообщений в комнатах
 extern int room_count;	//Количество комнат
+extern char nickname[MAXNICKLEN];
 
 //Структура сообщения
 struct message
@@ -70,6 +75,11 @@ int send_message_server(int sock, char** args); //Получение сообщ�
 int get_new_messages_client(int sock, int room, int count); //Получение недостающих сообщений.
 int get_new_messages_server(int sock, char** args);	//Отправка недостаюших сообщений клиенту. 
 
+char* get_name_client(int sock);    //Получение наименования сервера
+int get_name_server(int sock, char** args); //Отправка наименования сервера клиенты
+
+int ping_server(int sock, char** args);
+
 int get_string(char* buf, int maxlen, int fd);
 int send_message(int socket, char* str);
 char* get_message(int socket, char* str);
@@ -77,3 +87,5 @@ int read_messages(int room);	//Вывод всех сообщений, начи�
 int read_single_message(int room, struct message* msg);
 int write_message(int room, char* datetime, char* nickname, char* msg, int number); //Запись сообщения в файл
 int goto_message(int room, int count);  //Перемещение позиции в файле к count сообщению с конца
+
+int check_connection(int sock, struct sockaddr* address);

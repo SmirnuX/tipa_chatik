@@ -1,18 +1,55 @@
 // SPDX-License-Identifier: CPOL-1.02
 #include "main.h"
 
-int client(int sock, char* nickname)
+int client(int sock, struct sockaddr* address)
 {
+    char* server_name;
+    //Получение названия сервера
+    server_name = get_name_client(sock);
+    //Получение списка комнат
+    //Проверка на подключение
+    /*
+    close(sock);
+    errno = 0;
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    connect(sock, address, sizeof(*address));
+    perror("connect: ");*/
+    getc(stdin);
+    check_connection(sock, address);
+    return 1;
+    get_rooms_client(sock);
+    //Вывод списка комнат и выбор
+    printf("\t\tСписок комнат сервера %s\n", server_name);
+    //for(int i=0; i<room_count; i++)
+
     room_fd[0] = open("test_history", O_RDWR);
     room_number[0] = read_messages(room_fd[0]);
-    //printf("Выберите комнату из списка: \n");
     get_new_messages_client(sock, 0, room_number[0]);
     lseek(room_fd[0], 0, SEEK_SET);
     read_messages(room_fd[0]);
-    //get_rooms_client(sock);
+    get_name_client(sock);
     //send_message_client(sock, 0, "SmirnuX", "Hello, world");
 
     return 0;
+}
+
+int check_connection(int sock, struct sockaddr* address)
+{
+    char test[] = "/ping";
+    send_message(sock, test);
+    fd_set connection;
+    FD_ZERO(&connection);	//Обнуление набора
+    FD_SET(sock, &connection);
+	struct timeval timeout;
+	timeout.tv_usec = TIMEOUT_MS;
+	timeout.tv_sec = 5;
+    int a = select(sock+1, &connection, NULL, NULL, &timeout);
+    int b = 0;
+	ioctl(sock, FIONREAD, &b);
+    if (!a || (b==0))
+    {
+        printf("Соединению кранты\n");
+    }
 }
 
 int get_rooms_client(int sock) //Получение списка комнат
@@ -73,6 +110,17 @@ int get_new_messages_client(int sock, int room, int count)  //Получение
         //Запись сообщения в файл
     	write_message(room_fd[room], s_time, nickname, buf, ++room_number[room]);   
     }
+}
+
+char* get_name_client(int sock)  //Получение наименования сервера
+{
+    char buf[MAXBUFFER];
+    strncpy(buf, "/getname", MAXBUFFER);
+    send_message(sock, buf);
+    get_message(sock, buf);
+    char* res = malloc(sizeof(char)*MAXNICKLEN);
+    strncpy(res, buf, MAXNICKLEN);
+    return res;
 }
 
 int send_message(int socket, char* str) //Отправка произвольного сообщения

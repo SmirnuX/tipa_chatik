@@ -58,16 +58,16 @@ int client(struct s_connection* connection)
             lseek(room_fd[selected_room], 0, SEEK_SET);
             read_messages(room_fd[selected_room]);
             //===Меню выбора действия===
-            printf( WHITE BRIGHT "==============================\n"
+            printf( WHITE BRIGHT "============================================================\n"
             DEFAULT "\tДействия в \"%s\"\n"
                     "1. Написать сообщение\n"
                     "2. Обновить\n"
             BRIGHT  "0. Выйти из комнаты\n"
             DEFAULT "Введите номер выбранного действия: ", rooms[selected_room]);
             char choice;
+            
+            choice = getchar();
             while (getchar() !='\n');   //Очистка буфера
-            scanf("%c", &choice);
-            while (getchar()!='\n');
             switch (choice)
             {
                 case '0':
@@ -80,12 +80,12 @@ int client(struct s_connection* connection)
                 lseek(room_fd[selected_room], 0, SEEK_SET);
                 read_messages(room_fd[selected_room]);
                 printf( 
-                WHITE BRIGHT "==============================\n" //TODO - сделать возможность отмены отправки
+                WHITE BRIGHT "============================================================\n" //TODO - сделать возможность отмены отправки
                 DEFAULT      "\tВведите сообщение и нажмите ENTER для отправки сообщения\n"
-                WHITE BRIGHT "==============================\n");
+                WHITE BRIGHT "============================================================\n"
+                DEFAULT);
                 char buf[MAXBUFFER];
-                scanf("%255[^\n]", buf);
-                //fgets(buf, MAXBUFFER, stdin);
+                fgets(buf, MAXBUFFER, stdin);
                 send_message_client(connection, selected_room, nickname, buf);
                 break;
                 case '2':

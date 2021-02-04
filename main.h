@@ -23,9 +23,11 @@
 #define MAXBUFFER 256   //Максимальный размер буфера (также максимальная длина сообщения)
 #define MAXROOMS 16 //Максимальное количество комнат (также максимальное количество открытых файлов)
 #define SIZEOF_MAXLENGTH 8 //Длина позиции в файле (т.е. максимальная длина файла - 10^16б > 95 Мб)
+#define SIZEOF_MAXLENGTH_FORMAT "%08i"  //Формат для printf. 
 #define CMD_COUNT 5 //Количество команд, осуществляющих интерфейс клиент-сервер
 #define MAXCONNECTIONS 5    //Количество соединений, которые могут быть открыты одновременно
 #define MAXQUEUE 5  //Максимальное количество соединений в очереди
+#define TIMEOUT_S 0
 #define TIMEOUT_MS 400 //Частота опроса сокета в микросекундах
 
 //Файлы конфигурации
@@ -73,21 +75,21 @@ extern char nickname[MAXNICKLEN];
 
 //Команды, выполняемые на сервере
 extern const char *server_cmd_strings[CMD_COUNT];  //Список названий команд
-extern int (*server_cmd_functions[CMD_COUNT])(int, char**);  //Соответствующие им функции
+extern int (*server_cmd_functions[CMD_COUNT])(int);  //Соответствующие им функции
 
 int get_rooms_client(struct s_connection* connection);    //Получение списка комнат через сокет sock
-int get_rooms_server(int sock, char** args);	//Отправка списка комнат через сокет sock
+int get_rooms_server(int sock);	//Отправка списка комнат через сокет sock
 
 int send_message_client(struct s_connection* connection, int room, char* nickname, char* message); //Отправка сообщения серверу. 
-int send_message_server(int sock, char** args); //Получение сообщения сервером. Аргумент args не используется
+int send_message_server(int sock); //Получение сообщения сервером. Аргумент args не используется
 
 int get_new_messages_client(struct s_connection* connection, int room, int count); //Получение недостающих сообщений.
-int get_new_messages_server(int sock, char** args);	//Отправка недостаюших сообщений клиенту. 
+int get_new_messages_server(int sock);	//Отправка недостаюших сообщений клиенту. 
 
 char* get_name_client(struct s_connection* connection);    //Получение наименования сервера
-int get_name_server(int sock, char** args); //Отправка наименования сервера клиенты
+int get_name_server(int sock); //Отправка наименования сервера клиенты
 
-int ping_server(int sock, char** args);
+int ping_server(int sock);
 
 int get_string(char* buf, int maxlen, int fd);
 int send_message(int socket, char* str);

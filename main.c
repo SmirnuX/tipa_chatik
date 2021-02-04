@@ -8,7 +8,7 @@ const char *server_cmd_strings[CMD_COUNT] = { //Команды, выполняе
     "/getname",  //Получение наименования сервера
     "/ping" //Команда для проверки соединения. Должна на ответ подать "pong"
 };  //Команды для взаимодействия клиент - сервер
-int (*server_cmd_functions[CMD_COUNT])(int, char**) = {  //Соответствующие им функции сервера
+int (*server_cmd_functions[CMD_COUNT])(int) = {  //Соответствующие им функции сервера
     get_rooms_server,
     send_message_server,
     get_new_messages_server,

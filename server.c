@@ -36,77 +36,61 @@ int server(struct s_connection* connection)
 	closedir(directory);
 
 	//Подготовка списка соединений
-	int connections[MAXCONNECTIONS];	//Сокеты соединений
-	fd_set connections_set;	//Набор файловых дескрипторов соединений
-	int connections_count = 0;	//Количество соединений в наборе
-	FD_ZERO(&connections_set);	//Обнуление набора
-	int max = 0;	//Максимальное значение файлового дескриптора
+	int client_connection;	//Сокет соединения
+	fd_set client_connections_set;	//Набор файловых дескрипторов соединений
+	int client_connection_active = 0;	//Активно ли соединение
+	FD_ZERO(&client_connections_set);	//Обнуление набора
 	struct timeval timeout;
-	timeout.tv_usec = TIMEOUT_MS;
-	timeout.tv_sec = 30;
-
-
+	
     listen(connection->sock, MAXQUEUE);
 	printf("Ожидание...\n");
     while (1)
     {
-		//Проверка уже подтвержденных соединений
-		if (connections_count > 0)
+		if (client_connection_active != 0)
 		{
 			errno = 0;
-			select(max+1, &connections_set, NULL, NULL, &timeout);	
-			max = 0;
+			timeout.tv_usec = TIMEOUT_MS;
+			timeout.tv_sec = TIMEOUT_S;
+			select(client_connection+1, &client_connections_set, NULL, NULL, &timeout);	
+			printf("Прошло %li с %li мс\n", timeout.tv_sec, timeout.tv_usec);
 			
-			for (int i = 0; i < connections_count; i++)	//Прогон всех соединений
+			//Проверка, можно ли еще считать
+			int n = 0;
+			ioctl(client_connection, FIONREAD, &n);	//Считываем количество бит, которые можно прочитать
+			//int end_of_read = FD_ISSET(connections[i], &connections_set) && !(n==0);
+			int end_of_read = !(n==0);
+			if (end_of_read)	 
 			{
-				//Проверка, можно ли еще считать
-				int n = 0;
-				ioctl(connections[i], FIONREAD, &n);
-				int end_of_read = FD_ISSET(connections[i], &connections_set) && !(n==0);
-				if (end_of_read)
+				//Выполнение команды
+				char buf[MAXBUFFER];
+				//Получение команды
+				get_message(client_connection, buf);
+				if (buf[0] == '\0')
+					end_of_read = 0;
+				else
 				{
-					//Вычисление нового максимального значения
-					if (connections[i] > max)
-						max = connections[i];
-					//Выполнение команд для активных соединений (по одной команде на каждое соединение)
-					char buf[MAXBUFFER];
-					//Получение команды
-					get_message(connections[i], buf);
-					if (buf[0] == '\0')
-						end_of_read = 1;
-					else
+					printf("Принято %s\n", buf);
+					//Идентификация команды
+					for (int j = 0; j < CMD_COUNT; j++)	
 					{
-						printf("Принято %s для %i\n", buf, connections[i]);
-						//Идентификация команды
-						for (int j = 0; j < CMD_COUNT; j++)	
+						if (strcmp(buf, server_cmd_strings[j]) == 0)	
 						{
-							if (strcmp(buf, server_cmd_strings[j]) == 0)	
-							{
-								printf("Выполняется %s для %i\n", buf, connections[i]);
-								server_cmd_functions[j](connections[i], NULL);	//TODO - убрать аргумент char** args
-								break;
-							}
+							printf("Выполняется %s\n", buf);
+							server_cmd_functions[j](client_connection);
+							break;
 						}
 					}
 				}
-				if (!end_of_read)
-				{
-					printf("Закрытие %i\n", connections[i]);
-					FD_CLR(connections[i], &connections_set);
-					//Неактивные сокеты закрываются
-					close(connections[i]);
-					//Сдвиг остальных соединений влево
-					for (int j = i; j < connections_count-1; j++)	
-					{
-						connections[j] = connections[j+1];
-					}
-					connections_count--;
-					i--;
-				}
+			}
+			if (!end_of_read)	//Закрытие неактивных соединений
+			{
+				printf("Закрытие %i\n", client_connection);
+				FD_CLR(client_connection, &client_connections_set);
+				close(client_connection);
+				client_connection_active = 0;
 			}
 		}
-
-		if (connections_count < MAXCONNECTIONS)	//Попытка добавить новое соединение из очереди			
+		if (client_connection_active == 0)	//Добавление соединения из очереди			
 		{	
 			errno = 0;
 			int client_socket;
@@ -117,14 +101,11 @@ int server(struct s_connection* connection)
 				continue;
 			else
 			{
-				printf("Открытие %i\n", client_socket);
 				//Добавление соединения в набор
-				FD_SET(client_socket, &connections_set);
-				connections[connections_count] = client_socket;
-				if (max < client_socket)
-					max = client_socket;
+				FD_SET(client_socket, &client_connections_set);
+				client_connection = client_socket;
 				printf("Добавлено новое соединение\n");
-				connections_count++;
+				client_connection_active = 1;
 			}
 			printf("Ожидание...\n");
 		}
@@ -132,7 +113,7 @@ int server(struct s_connection* connection)
     return 0;
 }
 
-int get_rooms_server(int sock, char** args)	//Отправка списка комнат через сокет sock, аргумент args не используется
+int get_rooms_server(int sock)	//Отправка списка комнат через сокет sock, аргумент args не используется
 {
 	char buf[MAXBUFFER];
 	snprintf(buf, MAXBUFFER, "%i", room_count);	//Отправка количества комнат
@@ -144,7 +125,7 @@ int get_rooms_server(int sock, char** args)	//Отправка списка ко
 	}
 }
 
-int get_name_server(int sock, char** args)  //Отправка наименования сервера
+int get_name_server(int sock)  //Отправка наименования сервера
 {
     char buf[MAXNICKLEN];
 	strncpy(buf, nickname, MAXNICKLEN);
@@ -152,7 +133,7 @@ int get_name_server(int sock, char** args)  //Отправка наименов�
     return 0;
 }
 
-int send_message_server(int sock, char** args)	//Принятие сообщения сервером
+int send_message_server(int sock)	//Принятие сообщения сервером
 {
 	char s_time[MAXBUFFER], nickname[MAXBUFFER], buf[MAXBUFFER];
 	get_message(sock, buf);	//Получение номера комнаты 
@@ -170,7 +151,7 @@ int send_message_server(int sock, char** args)	//Принятие сообщен
 	write_message(room_fd[room], s_time, nickname, buf, ++room_number[room]);
 }
 
-int get_new_messages_server(int sock, char** args)	//Отправка недостаюших сообщений клиенту. Аргумент args не используется
+int get_new_messages_server(int sock)	//Отправка недостаюших сообщений клиенту. Аргумент args не используется
 {
     char buf[MAXBUFFER];
     //Получение комнаты
@@ -201,7 +182,7 @@ int get_new_messages_server(int sock, char** args)	//Отправка недос
 }
 
 
-int ping_server(int sock, char** args)
+int ping_server(int sock)
 {
 	char buf[] = "pong";
 	send_message(sock, buf);

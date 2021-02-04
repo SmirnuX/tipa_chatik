@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CPOL-1.02
 #include "main.h"
 
-int server(int server_socket, struct sockaddr* address)
+int server(struct s_connection* connection)
 {
     room_count = 0;
 	for (int i=0; i<MAXROOMS; i++)	//TODO - проверить целесообразность выделения памяти
@@ -43,10 +43,10 @@ int server(int server_socket, struct sockaddr* address)
 	int max = 0;	//Максимальное значение файлового дескриптора
 	struct timeval timeout;
 	timeout.tv_usec = TIMEOUT_MS;
-	timeout.tv_sec = 5;
+	timeout.tv_sec = 30;
 
 
-    listen(server_socket, MAXQUEUE);
+    listen(connection->sock, MAXQUEUE);
 	printf("Ожидание...\n");
     while (1)
     {
@@ -112,7 +112,7 @@ int server(int server_socket, struct sockaddr* address)
 			int client_socket;
 			struct sockaddr_in client_address;
 			int len = sizeof(client_address);
-			client_socket = accept(server_socket, (struct sockaddr*) &client_address, &len);
+			client_socket = accept(connection->sock, (struct sockaddr*) &client_address, &len);
 			if (errno == EAGAIN)
 				continue;
 			else
@@ -182,7 +182,7 @@ int get_new_messages_server(int sock, char** args)	//Отправка недос
     send_message(sock, buf);
 	//Перемещение к первому передаваемому сообщению
 	goto_message(room_fd[room], room_number[room] - count);	//TODO - вставить проверку на room_number < count
-	struct message msg;
+	struct s_message msg;
 	//printf("%i|", room_number[room]-count);
 	for (int i = 0; i < room_number[room]-count ; i++)
 	{	

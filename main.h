@@ -44,8 +44,23 @@
 
 #define clear() printf("\033[H\033[J"); //очистка экрана
 
-int client(int sock, struct sockaddr* address);
-int server(int sock, struct sockaddr* address);
+//Структура сообщения
+struct s_message
+{
+    char datetime[MAXBUFFER];
+    char nickname[MAXBUFFER];   //TODO - динамически
+    char msg_text[MAXBUFFER];
+};
+
+//Структура соединения
+struct s_connection
+{
+    int sock;   //Сокет подключения
+    struct sockaddr* address;   //Адрес (используется для переподключения)
+};
+
+int client(struct s_connection* connection);
+int server(struct s_connection* connection);
 
 //Сведения о комнатах
 extern char* rooms[MAXROOMS];	//Названия комнат
@@ -54,28 +69,22 @@ extern int room_number[MAXROOMS];	//Количество сообщений в �
 extern int room_count;	//Количество комнат
 extern char nickname[MAXNICKLEN];
 
-//Структура сообщения
-struct message
-{
-    char datetime[MAXBUFFER];
-    char nickname[MAXBUFFER];   //TODO - динамически
-    char msg_text[MAXBUFFER];
-};
+
 
 //Команды, выполняемые на сервере
 extern const char *server_cmd_strings[CMD_COUNT];  //Список названий команд
 extern int (*server_cmd_functions[CMD_COUNT])(int, char**);  //Соответствующие им функции
 
-int get_rooms_client(int sock);    //Получение списка комнат через сокет sock
+int get_rooms_client(struct s_connection* connection);    //Получение списка комнат через сокет sock
 int get_rooms_server(int sock, char** args);	//Отправка списка комнат через сокет sock
 
-int send_message_client(int sock, int room, char* nickname, char* message); //Отправка сообщения серверу. 
+int send_message_client(struct s_connection* connection, int room, char* nickname, char* message); //Отправка сообщения серверу. 
 int send_message_server(int sock, char** args); //Получение сообщения сервером. Аргумент args не используется
 
-int get_new_messages_client(int sock, int room, int count); //Получение недостающих сообщений.
+int get_new_messages_client(struct s_connection* connection, int room, int count); //Получение недостающих сообщений.
 int get_new_messages_server(int sock, char** args);	//Отправка недостаюших сообщений клиенту. 
 
-char* get_name_client(int sock);    //Получение наименования сервера
+char* get_name_client(struct s_connection* connection);    //Получение наименования сервера
 int get_name_server(int sock, char** args); //Отправка наименования сервера клиенты
 
 int ping_server(int sock, char** args);
@@ -84,8 +93,8 @@ int get_string(char* buf, int maxlen, int fd);
 int send_message(int socket, char* str);
 char* get_message(int socket, char* str);
 int read_messages(int room);	//Вывод всех сообщений, начиная с установленной ранее позици в файле
-int read_single_message(int room, struct message* msg);
+int read_single_message(int room, struct s_message* msg);
 int write_message(int room, char* datetime, char* nickname, char* msg, int number); //Запись сообщения в файл
 int goto_message(int room, int count);  //Перемещение позиции в файле к count сообщению с конца
 
-int check_connection(int sock, struct sockaddr* address);
+int check_connection(struct s_connection* connection);

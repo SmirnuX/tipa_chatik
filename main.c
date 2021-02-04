@@ -84,6 +84,10 @@ int main(int argc, char* argv[])
             fcntl(sock, F_SETFL, O_NONBLOCK);
             respond = bind(sock, (struct sockaddr *) &address, sizeof(address));
         }
+        struct s_connection connection;
+        connection.sock = sock;
+        connection.address = (struct sockaddr *) &address;
+
 
         if (respond == -1)
         {
@@ -96,9 +100,9 @@ int main(int argc, char* argv[])
         } 
 
         if (is_server == 0)
-            client(sock, (struct sockaddr *) &address);
+            client(&connection);
         else
-            server(sock, (struct sockaddr *) &address);
+            server(&connection);
     
         break;    
     }
@@ -156,7 +160,6 @@ int goto_message(int room, int count)	//Перемещение позиции в
 int read_messages(int room)	//Вывод всех сообщений (ВНИМАНИЕ: смещение в файле не меняется, перед чтением позиция должна находиться либо в начале файла, либо после позиции сообщения, предшествующего первому считываемому)
 {
     //TODO - поменять через несколько read_single_message(room_fd[room], &msg);
-        printf("Вывод истории сообщений\n");
 	char buf[MAXBUFFER];
 	int size;
 	for (int i = 0; ; i++)
@@ -192,7 +195,7 @@ int read_messages(int room)	//Вывод всех сообщений (ВНИМА
 	}	
 }
 
-int read_single_message(int room, struct message* msg)
+int read_single_message(int room, struct s_message* msg)
 {
     char buf[MAXBUFFER];
 	int size;

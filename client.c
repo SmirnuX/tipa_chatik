@@ -3,11 +3,25 @@
 
 int client(struct s_connection* connection)
 {
+    char* server_name = NULL;
     int selected_room = -1; //Выбранная комната
-    chdir("client_history");    //TODO - проверка на существование
+    if (chdir("client_history") == -1)  //Переход в папку, хранящую историю сообщений
+    {
+        int error = 0;
+        if (errno == ENOENT)    //Если папка не существует
+        {
+            errno = 0;
+            mkdir("client_history", PERMISSION);
+        }
+        if (errno != 0) //Для всех остальных ошибок, либо при ошибке при создании папки
+        {
+            perror(RED "Ошибка открытия папки \"client_history\"");
+            return 0;
+        }
+    }
     for (int i = 0; i < MAXROOMS; i++)
     {
-        rooms[i] = malloc(sizeof(char) * MAXNICKLEN);
+        rooms[i] = NULL;
         room_number[i] = 0;
         room_fd[i] = -1;
     }
@@ -16,19 +30,23 @@ int client(struct s_connection* connection)
     {
         if (selected_room == -1)
         {
-            //===Меню выбора комнаты===
-            char* server_name;
+            //===Меню выбора комнаты===   
             //Получение названия сервера
+            if (server_name != NULL)   
+                free(server_name);
             server_name = get_name_client(connection);
             //Получение списка комнат
             printf(DEFAULT "\t\tСписок комнат сервера %s\n", server_name);
             get_rooms_client(connection);
             for (int i = 0; i < room_count; i++)
             {
+                
                 if (room_fd[i] < 0) //Если файл для i-ой комнаты еще не создан
                     room_fd[i] = open(rooms[i], O_CREAT | O_RDWR, PERMISSION);  //Создание файлов истории
+                lseek(room_fd[i], 0, SEEK_SET);
+                room_number[i] = count_messages(room_fd[i]);
                 //TODO - вставить проверку версий сервера и удаление/создание новых файлов
-                printf("\t%i. %s\n", i+1, rooms[i]);
+                printf("\t%i. %s (%i сохр. сообщ-й)\n", i+1, rooms[i], room_number[i]);
             }
             printf( BRIGHT "\t0. Закрыть програму.\n"
                     DEFAULT "Введите номер выбранной комнаты: ");
@@ -38,15 +56,12 @@ int client(struct s_connection* connection)
             if (choice < 0 || choice > room_count || (choice == 0 && buf[0] != '0'))
             {
                 clear()
-                printf(BRIGHT RED"Неправильно набран номер комнаты.\n\n");
-                continue;   //Вторая попытка
+                printf(BRIGHT RED"Неправильно набран номер комнаты.\n\n"DEFAULT WHITE);
+                continue;
             }
             printf("%i", choice);
             if (choice == 0)
-            {
-                //TODO - сделать выход
-                return 0;
-            }
+                break;
             else
                 selected_room = choice-1;
         }
@@ -80,13 +95,15 @@ int client(struct s_connection* connection)
                 lseek(room_fd[selected_room], 0, SEEK_SET);
                 read_messages(room_fd[selected_room]);
                 printf( 
-                WHITE BRIGHT "============================================================\n" //TODO - сделать возможность отмены отправки
-                DEFAULT      "\tВведите сообщение и нажмите ENTER для отправки сообщения\n"
-                WHITE BRIGHT "============================================================\n"
+                WHITE BRIGHT"=======================================================================\n"
+                DEFAULT     "\tВведите сообщение и нажмите ENTER для отправки сообщения\n"
+                DIM         "\tДля отмены отправки сообщения сотрите все символы и нажмите ENTER.\n"
+                WHITE BRIGHT"=======================================================================\n"
                 DEFAULT);
                 char buf[MAXBUFFER];
-                fgets(buf, MAXBUFFER, stdin);
-                send_message_client(connection, selected_room, nickname, buf);
+                if (fgets(buf, MAXBUFFER, stdin) > 0)
+                    if (buf[0] != '\n')
+                        send_message_client(connection, selected_room, nickname, buf);
                 break;
                 case '2':
                 clear()
@@ -95,16 +112,14 @@ int client(struct s_connection* connection)
             }
         }
     }
-    /*
-
-    room_fd[0] = open("test_history", O_RDWR);
-    room_number[0] = read_messages(room_fd[0]);
-    
-    lseek(room_fd[0], 0, SEEK_SET);
-    check_connection(connection);
-    
-    get_name_client(connection);
-    //send_message_client(sock, 0, "SmirnuX", "Hello, world");*/
+    //Освобождение памяти
+    for (int i = 0; i < MAXROOMS; i++)
+    {
+        if (rooms[i] != NULL)
+            free(rooms[i]);
+        if (room_fd[i] != -1)
+            close(room_fd[i]);
+    }
 
     return 0;
 }
@@ -140,22 +155,23 @@ int check_connection(struct s_connection* connection)
 
 }
 
-int get_rooms_client(struct s_connection* connection) //Получение списка комнат
+int get_rooms_client(struct s_connection* connection) //Получение списка комнат. В процессе происходит выделение памяти, которая должна быть очищена
 {
     check_connection(connection);
     char buf[MAXBUFFER];
     strncpy(buf, "/getrooms", MAXBUFFER);
     send_message(connection->sock, buf);
     int count = atoi(get_message(connection->sock, buf));
-    //TODO - сделать запись комнат и их количества в память, а также создание файлов историй
     for (int i=0; i<count; i++)
     {
-        get_message(connection->sock, buf);        
+        get_message(connection->sock, buf);      
+        if (rooms[i] == NULL)   //Если память еще не выделена
+            rooms[i] = malloc(sizeof(char) * MAXNICKLEN);  
         strncpy(rooms[i], buf, MAXNICKLEN);
     }
     room_count = count;
 }
-//TODO - добавить проверку времени сервера (т.е. при подключении сохраняется время запуска сервера, если сервер был закрыт и запущен заново - происходит заново получение списка комнат и сообщений)
+
 int send_message_client(struct s_connection* connection, int room, char* nickname, char* message)    //Отправка сообщения серверу. args - вектор из трех строк - номера комнаты, никнейма и отправляемого сообщения
 {
     check_connection(connection);
@@ -171,7 +187,7 @@ int send_message_client(struct s_connection* connection, int room, char* nicknam
     send_message(connection->sock, message);
 }
 
-int get_new_messages_client(struct s_connection* connection, int room, int count)  //Получение новых сообщений. args - вектор из двух строк - номера комнаты и количества уже имеющихся сообщений
+int get_new_messages_client(struct s_connection* connection, int room, int count)  //Получение новых сообщений.
 {
     check_connection(connection);
     char buf[MAXBUFFER];   
@@ -189,21 +205,16 @@ int get_new_messages_client(struct s_connection* connection, int room, int count
     for(int i = count; i<target_count; i++)
     {
         char s_time[MAXBUFFER], nickname[MAXBUFFER], buf[MAXBUFFER];
-	    //Получение даты и времени
-	    get_message(connection->sock, s_time);
-    	//printf(DEFAULT BRIGHT"%s\n",s_time);
-	    //Получение никнейма
-	    get_message(connection->sock, nickname);
-    	//printf(DEFAULT BRIGHT" %s\n", nickname);
 	    //Получение сообщения
+	    get_message(connection->sock, s_time);
+	    get_message(connection->sock, nickname);
     	get_message(connection->sock, buf);
-    	//printf(DEFAULT"%s\n\n", buf);
         //Запись сообщения в файл
     	write_message(room_fd[room], s_time, nickname, buf, ++room_number[room]);   
     }
 }
 
-char* get_name_client(struct s_connection* connection)  //Получение наименования сервера
+char* get_name_client(struct s_connection* connection)  //Получение наименования сервера. Память под результат выделяется динамически и должна быть очищена.
 {
     check_connection(connection);
     char buf[MAXBUFFER];

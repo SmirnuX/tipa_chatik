@@ -4,8 +4,8 @@
 int server(struct s_connection* connection)
 {
     room_count = 0;
-	for (int i=0; i<MAXROOMS; i++)	//TODO - проверить целесообразность выделения памяти
-		rooms[i] = malloc(sizeof(char) * MAXNICKLEN);	//TODO - освободить память
+	for (int i=0; i<MAXROOMS; i++)
+		rooms[i] = NULL;
     DIR* directory = opendir("server_history");
 	if (directory==NULL)
 	{
@@ -24,6 +24,8 @@ int server(struct s_connection* connection)
 			lstat((*dir_ptr).d_name, &stat_file);	//Проверяем на то, является ли файл папкой
 			if (!S_ISDIR(stat_file.st_mode))	//Записываем имена комнат в массив
 			{	
+				if (rooms[room_count] == NULL)
+					rooms[room_count] = malloc(sizeof(char) * MAXNICKLEN);
 				strncpy(rooms[room_count],(*dir_ptr).d_name, MAXNICKLEN);
 				room_fd[room_count] = open(rooms[room_count], O_RDWR);
 				room_number[room_count] = read_messages(room_fd[0]);
@@ -110,6 +112,10 @@ int server(struct s_connection* connection)
 			printf("Ожидание...\n");
 		}
     }
+	//Освобождение памяти
+	for (int i=0; i<MAXROOMS; i++)	
+		if (rooms[i] != NULL)
+			free(rooms[i]);
     return 0;
 }
 
@@ -162,7 +168,7 @@ int get_new_messages_server(int sock)	//Отправка недостаюших 
     snprintf(buf, MAXBUFFER, "%i", room_number[room]);
     send_message(sock, buf);
 	//Перемещение к первому передаваемому сообщению
-	goto_message(room_fd[room], room_number[room] - count);	//TODO - вставить проверку на room_number < count
+	goto_message(room_fd[room], room_number[room] - count);
 	struct s_message msg;
 	//printf("%i|", room_number[room]-count);
 	for (int i = 0; i < room_number[room]-count ; i++)

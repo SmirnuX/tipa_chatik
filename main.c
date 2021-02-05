@@ -159,40 +159,26 @@ int goto_message(int room, int count)	//Перемещение позиции в
 
 int read_messages(int room)	//Вывод всех сообщений (ВНИМАНИЕ: смещение в файле не меняется, перед чтением позиция должна находиться либо в начале файла, либо после позиции сообщения, предшествующего первому считываемому)
 {
-    //TODO - поменять через несколько read_single_message(room_fd[room], &msg);
-	char buf[MAXBUFFER];
-	int size;
-	for (int i = 0; ; i++)
-	{	
-		for (int j = 0; j < 4; j++)	//Чтение сообщений состоит из четырех частей
-		{
-			buf[MAXBUFFER-1] = '\0';
-			for (size = 0; size < MAXBUFFER-1; size++)
-			{
-				if (read(room, buf+size, 1) != 1)
-				{
-					return i;
-				}
-				if (buf[size] == '\0')
-					break;
-			}
-			switch (j)
-			{
-				case 0:
-				printf(RED"%s\n", buf);
-				break;
-				case 1:
-				printf(DIM WHITE"%s\n", buf);
-				break;
-				case 2:
-				printf(DEFAULT BRIGHT" %s\n", buf);
-				break;
-				case 3:
-				printf(DEFAULT"%s\n\n", buf);
-			}
-		}
-		lseek(room, SIZEOF_MAXLENGTH, SEEK_CUR);
+    struct s_message message;
+    int i;
+	for (i = 0; read_single_message(room, &message) != 1; i++)
+	{	  
+        printf(DIM WHITE"%s\n", message.datetime);
+        printf(DEFAULT BRIGHT" %s\n", message.nickname);
+        printf(DEFAULT"%s\n\n", message.msg_text);	
 	}	
+    return i;
+}
+
+int count_messages(int room)	//Подсчет количества сообщений в файле (ВНИМАНИЕ: смещение в файле не меняется, перед чтением позиция должна находиться либо в начале файла, либо после позиции сообщения, предшествующего первому считываемому)
+{
+    struct s_message message;
+    int i;
+	for (i = 0; read_single_message(room, &message) != 1; i++)
+	{	  
+
+	}	
+    return i;
 }
 
 int read_single_message(int room, struct s_message* msg)
@@ -245,7 +231,7 @@ int write_message(int room, char* datetime, char* nickname, char* msg, int numbe
 	write(room, datetime, strlen(datetime)+1);
 	write(room, nickname, strlen(nickname)+1);
 	write(room, msg, strlen(msg)+1);
-	snprintf(buf, MAXBUFFER, "%08i", pos - SIZEOF_MAXLENGTH);	//TODO - заменить 8 на SIZEOF
+	snprintf(buf, MAXBUFFER, SIZEOF_MAXLENGTH_FORMAT, pos - SIZEOF_MAXLENGTH);
 	write(room, buf, SIZEOF_MAXLENGTH);
 }
 

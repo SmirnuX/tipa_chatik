@@ -50,7 +50,7 @@
 struct s_message
 {
     char datetime[MAXBUFFER];
-    char nickname[MAXBUFFER];   //TODO - динамически
+    char nickname[MAXNICKLEN];
     char msg_text[MAXBUFFER];
 };
 
@@ -98,5 +98,6 @@ int read_messages(int room);	//Вывод всех сообщений, начи�
 int read_single_message(int room, struct s_message* msg);
 int write_message(int room, char* datetime, char* nickname, char* msg, int number); //Запись сообщения в файл
 int goto_message(int room, int count);  //Перемещение позиции в файле к count сообщению с конца
+int count_messages(int room);
 
 int check_connection(struct s_connection* connection);

@@ -6,15 +6,14 @@ const char *server_cmd_strings[CMD_COUNT] = { //Команды, выполняе
     "/sendmessage", //Отправка сообщения на сервер. Синтаксис: /sendmessage <room> <nickname> <message>
     "/getnewmessages",  //Получение новых сообщений с сервера. Синтаксис: /getnewmessages <room> <number> (number - количество уже имеющихся сообщений)
     "/getname",  //Получение наименования сервера
-    "/ping" //Команда для проверки соединения. Должна на ответ подать "pong"
 };  //Команды для взаимодействия клиент - сервер
-int (*server_cmd_functions[CMD_COUNT])(int) = {  //Соответствующие им функции сервера
+int (*server_cmd_functions[CMD_COUNT])(struct s_connection*) = {  //Соответствующие им функции сервера
     get_rooms_server,
     send_message_server,
     get_new_messages_server,
     get_name_server,
-    ping_server
 };
+long server_time;    //Время запуска сервера
 
 char* rooms[MAXROOMS];	//Названия комнат
 int room_fd[MAXROOMS];	//Файловые дескрипторы комнат
@@ -28,7 +27,9 @@ int main(int argc, char* argv[])
     char* config_file;
     short is_server; 
     char ipaddr[MAXIPLEN+1];
+    char port_str[MAXPORTLEN+1];
     int port;
+    struct sockaddr_in address;
 
     if (argc == 2 && strcmp(argv[1], "-s")==0)
     {
@@ -42,36 +43,109 @@ int main(int argc, char* argv[])
         is_server = 0;
         printf("***TIPA CHATIK***\n\n");
     }
+    int edit_config = 0;
+    int config;
+    int sock;
     while (1)
     {
-        printf("\tЗагрузка файла конфигурации...\n");
-        int config = open(config_file, O_RDONLY);
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        struct sockaddr_in address;
-        if (config == -1 && errno == ENOENT)    //Создание нового файла конфигурации
+        if (!edit_config)
         {
-            printf( 
-            RED BRIGHT "Файл конфигурации не найден\n"
-            WHITE DEFAULT "Создание файла конфигурации...\n>");
-            //TODO Создание нового файла конфигурации
-        }
-        else
-        {
-            char port_str[MAXPORTLEN+1];
-            if (get_string(ipaddr, MAXIPLEN, config) == -1 || 
-            get_string(port_str, MAXPORTLEN, config) == -1 || 
-            get_string(nickname, MAXNICKLEN, config) == -1)
+            printf("\tЗагрузка файла конфигурации...\n");
+            config = open(config_file, O_RDONLY);
+            sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (config == -1)
             {
-                //TODO Создание нового файла конфигурации
+                if (errno == ENOENT)
+                {
+                    printf( 
+                    RED BRIGHT "Файл конфигурации не найден\n" WHITE DEFAULT);
+                    edit_config = 1;
+                    errno = 0;
+                }
+                else
+                {
+                    perror("Ошибка открытия файла конфигурации: ");
+                    return 1;
+                }
+            }
+            else    //Чтение из уже имеющегося файла конфигурация
+            {
+                
+                if (get_string(ipaddr, MAXIPLEN, config) == -1 || 
+                get_string(port_str, MAXPORTLEN, config) == -1 || 
+                get_string(nickname, MAXNICKLEN, config) == -1)
+                {
+                    printf( 
+                    RED BRIGHT "Файл конфигурации имеет неправильный формат\n" WHITE DEFAULT);
+                    edit_config = 1;
+                } 
+            }   
+        }
+        if (edit_config)    //Создание/редактирования файла конфигурации
+        {
+            printf("\tВведите IP адрес, по которому будет производиться подключение\n>");    
+            __fpurge(stdin);  //Очистка буфера        
+            if (fgets(ipaddr, MAXIPLEN, stdin) == NULL)
+            {
+                printf ("Ошибка ввода IP адреса.\n\n");
                 continue;
             }
-            port = atoi(port_str);
-            printf("Будет использована следующая конфигурация:\n"
+            remove_new_line(ipaddr);
+            __fpurge(stdin);  //Очистка буфера
+            printf("\tВведите порт, по которому будет производиться подключение\n>");
+            if (fgets(port_str, MAXPORTLEN, stdin) == NULL)
+            {
+                printf ("Ошибка ввода порта.\n\n");
+                continue;
+            }
+            remove_new_line(port_str);
+            __fpurge(stdin);  //Очистка буфера
+            if (is_server)
+                printf("\tВведите наименование сервера.\n>");
+            else
+                printf("\tВведите никнейм.\n>");
+            if (fgets(nickname, MAXNICKLEN, stdin) == NULL)
+            {
+                printf ("Ошибка ввода никнейма.\n\n");
+                continue;
+            }
+        }
+        port = atoi(port_str);
+        //Проверка введенных данных на корректность
+        if (inet_aton(ipaddr, &address.sin_addr) == 0)
+        {
+            printf ("Неправильный формат IP адреса!\n\n");
+            edit_config = 1;
+            continue;
+        }
+        if (port < 0 || port > 65535)
+        {
+            printf ("Неправильный формат порта!\n\n");
+            edit_config = 1;
+            continue;
+        }
+        close(config);
+        //Сохранение данных в файле конфигурации
+        if (edit_config)
+        {
+            remove(config_file);
+            config = open(config_file, O_CREAT | O_WRONLY, PERMISSION);
+            if (config < 0)
+            {
+                perror("Ошибка создания файла конфигурации: ");
+                return 1;
+            }
+            //Запись строк в файл
+            write(config, ipaddr, strlen(ipaddr));
+            write(config, "\n", sizeof(char));
+            write(config, port_str, strlen(port_str));
+            write(config, "\n", sizeof(char));
+            write(config, nickname, strlen(nickname));
+        }
+        printf("Будет использована следующая конфигурация:\n"
             "\t IP сервера: \t%s:%i\n"
             "\t Никнейм: \t%s\n"
-            , ipaddr, port, nickname);
-        }
-        //TODO - добавить проверку для IP и порта
+            , ipaddr, port, nickname); 
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = inet_addr(ipaddr);
         address.sin_port = htons(port);
@@ -91,20 +165,29 @@ int main(int argc, char* argv[])
 
         if (respond == -1)
         {
-            perror("Ошибка подключения: ");
-            printf(BLINK "Нажмите пробел для повторной попытки, или другую клавишу для выхода." DEFAULT);
-            if (getc(stdin) != ' ')
+            perror( BRIGHT RED      "Ошибка подключения: ");
+            printf( DEFAULT WHITE   "Выберите действие\n"
+                            "1. Повторить попытку подключения\n"
+                            "2. Изменить конфигурацию\n"
+                            "0. Закрыть программу\n");
+            switch (getchar())
+            {
+                case '0':
                 return 0;
+                case '2':
+                edit_config = 1;
+            }
+            while (getchar() !='\n');   //Очистка буфера
             clear()
             errno = 0;
-        } 
-
-        if (is_server == 0)
-            client(&connection);
+        }
         else
-            server(&connection);
-    
-        break;    
+        { 
+            if (is_server == 0)
+                client(&connection);
+            else
+                server(&connection);
+        }  
     }
     return 0;
 }
@@ -163,7 +246,7 @@ int read_messages(int room)	//Вывод всех сообщений (ВНИМА
     int i;
 	for (i = 0; read_single_message(room, &message) != 1; i++)
 	{	  
-        printf(DIM WHITE"%s\n", message.datetime);
+        printf(DIM BLUE"%s\n", message.datetime);
         printf(DEFAULT BRIGHT" %s\n", message.nickname);
         printf(DEFAULT"%s\n\n", message.msg_text);	
 	}	
@@ -235,43 +318,8 @@ int write_message(int room, char* datetime, char* nickname, char* msg, int numbe
 	write(room, buf, SIZEOF_MAXLENGTH);
 }
 
-    /*
-    int server_socket = socket (AF_INET, SOCK_STREAM, 0);
-    
-    struct sockaddr_in address;
-    address.sin_family = AF_INET;
-    int port;
-    while (1)
-    {
-        
-        char ipstr[16];
-        if (!fgets(ipstr, 16, stdin));
-        {
-            clear();
-            printf ("Ошибка ввода!\n\n");
-            continue;
-        }
-        clear();
-        if (inet_aton(ipstr, &address.sin_addr)==0)
-        {
-            clear();
-            printf ("Неправильный формат IP адреса!\n\n");
-            continue;
-        }
-        printf("\tВведите порт, по которому будет производиться подключение\n>");
-        if (scanf("%i", &port) != 1);
-        {
-            clear();
-            printf ("Ошибка ввода!\n\n");
-            continue;
-        }
-        clear();
-        if (port < 0 || port > 65535)
-        {
-            clear();
-            printf ("Неправильный формат порта!\n\n");
-            continue;
-        }
-          
-        else break; 
-    }*/
+void remove_new_line(char* str) //Убирает последний символ новой строки (если есть)
+{
+    if (str[strlen(str)-1] == '\n')
+        str[strlen(str)-1] = '\0';
+}

@@ -42,12 +42,8 @@ int server(struct s_connection* connection)
 	for (int i = 0; i < room_count; i++)
 		printf("%i.%s (%li байт, %i сообщений)\n", i+1, rooms[i], lseek(room_fd[i], 0, SEEK_END), room_number[i]);
 	printf(	WHITE	"============================================================\n");
-	
-	
 	closedir(directory);
 	//Подготовка списка соединений
-	struct s_connection client_connection;
-	client_connection.sock = -1;
 	fd_set connections_set;	//Набор файловых дескрипторов соединений
 	fd_set temp_connections_set;	//Временный набор дескрипторов	
 	FD_ZERO(&connections_set);	//Обнуление набора
@@ -141,7 +137,7 @@ int server(struct s_connection* connection)
 					for (int i = 0; i < room_count; i++)
 						printf("%i.%s (%li байт, %i сообщений)\n", i+1, rooms[i], lseek(room_fd[i], 0, SEEK_END), room_number[i]);
 					printf( BRIGHT  "\t0. Отменить написание сообщения\n"
-							RED  	"На время написания сообщения работа сервера приостановлена"
+							RED  	"На время написания сообщения работа сервера приостановлена\n"
 							WHITE	"============================================================\n"
 							DEFAULT "Введите номер выбранной комнаты: ");
 					fgets(buf, MAXBUFFER, stdin);
@@ -169,7 +165,7 @@ int server(struct s_connection* connection)
 								char s_time[MAXBUFFER];
 								time_t timer = time(NULL);
 								strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
-								write_message(choice, s_time, nickname, buf, ++room_number[choice]);
+								write_message(room_fd[choice], s_time, nickname, buf, ++room_number[choice]);
 								printf(	"\n Сообщение отправлено.\n");
 							}
 						}
@@ -273,14 +269,12 @@ int server(struct s_connection* connection)
 							{
 								if (strcmp(buf, server_cmd_strings[j]) == 0)	
 								{
-									
-									client_connection.sock = fd;
 									printf("[%i]Выполняется %s \n",fd ,buf);
 									snprintf(buf, MAXBUFFER, "%li", server_time);
-									send_message(&client_connection, buf);	//Отправляем "версию" сервера
+									send_data(fd, buf);	//Отправляем "версию" сервера
 									get_message(fd, buf);
 									if (buf[0] != '0')	//Если "версия" сервера совпадает с клиентом - выполняем команду
-										server_cmd_functions[j](&client_connection);	//TODO Убрать client_connection
+										server_cmd_functions[j](fd);	
 									break;
 								}
 							}
@@ -290,10 +284,6 @@ int server(struct s_connection* connection)
 							close(fd);
 							FD_CLR(fd, &connections_set);
 							printf("[%i]Закрыто соединение\n", fd);
-							if (fd == maxfd)
-							{
-								//TODO - вставить вычисление нового maxfd
-							}
 						}
 					}
 				}
@@ -307,54 +297,54 @@ int server(struct s_connection* connection)
     return 0;
 }
 
-int get_rooms_server(struct s_connection* connection)	//Отправка списка комнат через сокет sock, аргумент args не используется
+int get_rooms_server(int sock)	//Отправка списка комнат через сокет sock
 {
 	char buf[MAXBUFFER];
 	snprintf(buf, MAXBUFFER, "%i", room_count);	//Отправка количества комнат
-	server_send_message(connection, buf);
+	send_data(sock, buf);
 	for (int i=0; i<room_count; i++)	
 	{
 		strncpy(buf, rooms[i], MAXNICKLEN);
-		server_send_message(connection, buf);	//Отправка названий комнат
+		send_data(sock, buf);	//Отправка названий комнат
 	}
 }
 
-int get_name_server(struct s_connection* connection)  //Отправка наименования сервера
+int get_name_server(int sock)  //Отправка наименования сервера клиенту через сокет sock
 {
     char buf[MAXNICKLEN];
 	strncpy(buf, nickname, MAXNICKLEN);
-    server_send_message(connection, buf);
+    send_data(sock, buf);
     return 0;
 }
 
-int send_message_server(struct s_connection* connection)	//Принятие сообщения сервером
+int send_message_server(int sock)	//Получение сообщения сервером через сокет sock
 {
 	char s_time[MAXBUFFER], nickname[MAXBUFFER], buf[MAXBUFFER];
-	get_message(connection->sock, buf);	//Получение номера комнаты 
+	get_message(sock, buf);	//Получение номера комнаты 
 	int room = atoi(buf);
 	//Время получения сообщения сервером
 	time_t timer = time(NULL);
 	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
 	printf(DIM BLUE"%s\n", s_time);
 	//Никнейм отправителя
-	get_message(connection->sock, nickname);
+	get_message(sock, nickname);
 	printf(DEFAULT BRIGHT" %s\n", nickname);
 	//Сообщение
-	get_message(connection->sock, buf);
+	get_message(sock, buf);
 	printf(DEFAULT"%s\n", buf);
 	write_message(room_fd[room], s_time, nickname, buf, ++room_number[room]);
 }
 
-int get_new_messages_server(struct s_connection* connection)	//Отправка недостаюших сообщений клиенту. Аргумент args не используется
+int get_new_messages_server(int sock)	//Отправка недостаюших сообщений клиенту через сокет sock
 {
     char buf[MAXBUFFER];
     //Получение комнаты
-	int room = atoi(get_message(connection->sock, buf));
+	int room = atoi(get_message(sock, buf));
     //Получение количества сообщений
-    int count = atoi(get_message(connection->sock, buf));	
+    int count = atoi(get_message(sock, buf));	
     //Отправка количества сообщений
     snprintf(buf, MAXBUFFER, "%i", room_number[room]);
-    server_send_message(connection, buf);
+    send_data(sock, buf);
 	//Перемещение к первому передаваемому сообщению
 	goto_message(room_fd[room], room_number[room] - count);
 	struct s_message msg;
@@ -364,22 +354,22 @@ int get_new_messages_server(struct s_connection* connection)	//Отправка 
 		read_single_message(room_fd[room], &msg);
   	  	//Передача сообщений
 		strncpy(buf, msg.datetime, strlen(msg.datetime)+1);
-		server_send_message(connection, buf);
+		send_data(sock, buf);
 		strncpy(buf, msg.nickname, strlen(msg.nickname)+1);
-		server_send_message(connection, buf);
+		send_data(sock, buf);
 		strncpy(buf, msg.msg_text, strlen(msg.msg_text)+1);
-		server_send_message(connection, buf);
+		send_data(sock, buf);
 	}
-	return 1;	
+	return 0;	
 }
 
-int server_send_message(struct s_connection* connection, char* str) //Отправка произвольного сообщения
+int send_data(int sock, char* str) //Отправка произвольного сообщения str БЕЗ попытки переподключения
 {
-    ssize_t a = write(connection->sock, str, strlen(str)+1);  
+    ssize_t a = write(sock, str, strlen(str)+1);  
     return (int) a;
 }
 
-void erase_lines(int n)
+void erase_lines(int n)	//Перемещение курсора на n строк наверх (и удаление этих строк)
 {
 	erase_line()
 	for (int i = 0; i < n; i++)
@@ -410,7 +400,7 @@ void rooms_swap(int a, int b)
 {
 	int tmp_fd, tmp_n;
 	char* tmp_str;
-	//TODO - для этого вообще то структуры придумали
+	//Для этого вообще то структуры придумали
 	tmp_str = rooms[a];
 	tmp_fd = room_fd[a];
 	tmp_n = room_number[a];

@@ -45,12 +45,12 @@ int client(struct s_connection* connection)
                 if (room_fd[i] > 0)
                 {
                     close(room_fd[i]);
+                    room_fd[i] = -1;
                 }
             }
             for (int i = 0; i < room_count; i++)
             {
-                if (room_fd[i] < 0) //Если файл для i-ой комнаты еще не создан
-                    room_fd[i] = open(rooms[i], O_CREAT | O_RDWR, PERMISSION);  //Создание файлов истории
+                room_fd[i] = open(rooms[i], O_CREAT | O_RDWR, PERMISSION);  //Создание файлов истории
                 lseek(room_fd[i], 0, SEEK_SET);
                 room_number[i] = count_messages(room_fd[i]);
                 printf("\t%i. %s (%i сохр. сообщ-й)\n", i+1, rooms[i], room_number[i]);
@@ -74,7 +74,7 @@ int client(struct s_connection* connection)
         }
         else
         {
-            printf("%s", rooms[selected_room]);
+            printf("\tСообщения %s\n\n", rooms[selected_room]);
             //Отображение истории сообщений
             if (get_new_messages_client(connection, selected_room, room_number[selected_room]) == ECONNREFUSED)
             {
@@ -84,6 +84,7 @@ int client(struct s_connection* connection)
                 continue;
             }
             lseek(room_fd[selected_room], 0, SEEK_SET);
+            clear()
             read_messages(room_fd[selected_room]);
             //===Меню выбора действия===
             printf( WHITE BRIGHT "============================================================\n"
@@ -150,13 +151,13 @@ int client(struct s_connection* connection)
     return 0;
 }
 
-int get_rooms_client(struct s_connection* connection) //Получение списка комнат. В процессе происходит выделение памяти, которая должна быть очищена
+int get_rooms_client(struct s_connection* connection) //Получение списка комнат от сервера через соединение connection. В процессе выделяется память, которая должна быть очищена! (rooms[i])
 {
     char buf[MAXBUFFER];
     strncpy(buf, "/getrooms", MAXBUFFER);
-    client_send_message(connection, buf);
+    send_data_safe(connection, buf);
     server_time = atoi(get_message(connection->sock, buf)); //Получение "версии" сервера
-    client_send_message(connection, "1");
+    send_data_safe(connection, "1");
     int count = atoi(get_message(connection->sock, buf));
     for (int i=0; i<count; i++)
     {
@@ -169,44 +170,44 @@ int get_rooms_client(struct s_connection* connection) //Получение сп�
     return 0;
 }
 
-int send_message_client(struct s_connection* connection, int room, char* nickname, char* message)    //Отправка сообщения серверу. args - вектор из трех строк - номера комнаты, никнейма и отправляемого сообщения
+int send_message_client(struct s_connection* connection, int room, char* nickname, char* message)    //Отправка сообщения message на сервер через соединение connection в комнату под номером room пользователем nickname
 {
     char buf[MAXBUFFER];
     strncpy(buf, "/sendmessage", MAXBUFFER);
-    client_send_message(connection, buf);
+    send_data_safe(connection, buf);
     if (atoi(get_message(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
-        client_send_message(connection, "0");   //Информируем сервер о старой версии
+        send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
     }
-    client_send_message(connection, "1");
+    send_data_safe(connection, "1");
     //Отправка комнаты
     snprintf(buf, MAXBUFFER, "%i", room);
-    client_send_message(connection, buf);
+    send_data_safe(connection, buf);
     //Отправка никнейма
-    client_send_message(connection, nickname);
+    send_data_safe(connection, nickname);
     //Отправка сообщения
-    client_send_message(connection, message);
+    send_data_safe(connection, message);
     return 0;
 }
 
-int get_new_messages_client(struct s_connection* connection, int room, int count)  //Получение новых сообщений.
+int get_new_messages_client(struct s_connection* connection, int room, int count)  //Получение недостающих сообщений через соединение connection для комнаты под номером room, в которой на данный момент сохранено count сообщений
 {
     char buf[MAXBUFFER];   
     strncpy(buf, "/getnewmessages", MAXBUFFER);
-    client_send_message(connection, buf);
+    send_data_safe(connection, buf);
     if (atoi(get_message(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
-        client_send_message(connection, "0");   //Информируем сервер о старой версии
+        send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
     }
-    client_send_message(connection, "1");
+    send_data_safe(connection, "1");
     //Отправка комнаты
     snprintf(buf, MAXBUFFER, "%i", room);
-    client_send_message(connection, buf);
+    send_data_safe(connection, buf);
     //Отправка количества сообщений
     snprintf(buf, MAXBUFFER, "%i", count);
-    client_send_message(connection, buf);
+    send_data_safe(connection, buf);
     //Прием количества сообщений
     int target_count = atoi(get_message(connection->sock, buf));
     //Прием сообщений
@@ -223,32 +224,26 @@ int get_new_messages_client(struct s_connection* connection, int room, int count
     return 0;
 }
 
-char* get_name_client(struct s_connection* connection)  //Получение наименования сервера. Память под результат выделяется динамически и должна быть очищена.
+char* get_name_client(struct s_connection* connection)  //Получение наименования сервера через соединение connection. В процессе выделяется память, которая должна быть очищена! (возвращаемое значение)
 {
     char buf[MAXBUFFER];
     strncpy(buf, "/getname", MAXBUFFER);
-    client_send_message(connection, buf);
+    send_data_safe(connection, buf);
     get_message(connection->sock, buf); //Получение "версии" сервера - в этой команде не используется
-    client_send_message(connection, "1");
+    send_data_safe(connection, "1");
     get_message(connection->sock, buf);
     char* res = malloc(sizeof(char)*MAXNICKLEN);
     strncpy(res, buf, MAXNICKLEN);
     return res;
 }
 
-int send_message(struct s_connection* connection, char* str) //Отправка произвольного сообщения
-{
-    ssize_t a = write(connection->sock, str, strlen(str)+1);  
-    return (int) a;
-}
-
-int client_send_message(struct s_connection* connection, char* str) //Отправка произвольного сообщения
+int send_data_safe(struct s_connection* connection, char* str) //Отправка произвольного сообщения str с попыткой переподключения в случае неудачи
 {
     //Проверка соединения
     fd_set connection_set;
 	struct timeval timeout;
     //Попытка переподключиться
-    while (send_message(connection, str) <= 0)
+    while (send_data(connection->sock, str) <= 0)
     {
         printf("Соединению кранты\n");
         close(connection->sock);

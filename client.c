@@ -126,12 +126,15 @@ int client(struct s_connection* connection)
                 char buf[MAXBUFFER];    
                 if (fgets(buf, MAXBUFFER, stdin) > 0)
                     if (buf[0] != '\n')
+                    {
+                        __fpurge(stdin);    //Очистка буфера
                         if (send_message_client(connection, selected_room, nickname, buf) == ECONNREFUSED)
                         {
                             clear()
                             printf ("Произошли изменения на сервере. Переподключение...\n\n");
                             selected_room = -1;
                         }
+                    }
                 break;
                 case '2':
                 clear()
@@ -148,7 +151,8 @@ int client(struct s_connection* connection)
         if (room_fd[i] != -1)
             close(room_fd[i]);
     }
-
+    if (server_name != NULL)   
+        free(server_name);
     return 0;
 }
 
@@ -186,8 +190,10 @@ int send_message_client(struct s_connection* connection, int room, char* nicknam
     snprintf(buf, MAXBUFFER, "%i", room);
     send_data_safe(connection, buf);
     //Отправка никнейма
+    nickname[MAXNICKLEN-1] = '\0';
     send_data_safe(connection, nickname);
     //Отправка сообщения
+    message[MAXBUFFER-1] = '\0';
     send_data_safe(connection, message);
     return 0;
 }

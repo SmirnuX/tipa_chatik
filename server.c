@@ -165,6 +165,7 @@ int server(struct s_connection* connection)
 								char s_time[MAXBUFFER];
 								time_t timer = time(NULL);
 								strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
+								buf[MAXBUFFER - 1] = '\0';
 								write_message(room_fd[choice], s_time, nickname, buf, ++room_number[choice]);
 								printf(	"\n Сообщение отправлено.\n");
 							}
@@ -313,6 +314,7 @@ int get_name_server(int sock)  //Отправка наименования се�
 {
     char buf[MAXNICKLEN];
 	strncpy(buf, nickname, MAXNICKLEN);
+	buf[MAXNICKLEN-1] = '\0';
     send_data(sock, buf);
     return 0;
 }

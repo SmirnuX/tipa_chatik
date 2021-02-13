@@ -266,7 +266,7 @@ char* get_message(int socket, char* str)    //Прием произвольно�
 {
     int i;
     char temp;
-    for (i=0; i<MAXBUFFER-1; i++)
+    for (i=0; i<MAXBUFFER; i++)
     {  
         int j = read(socket, str+i, 1); 
         if (j <= 0) 

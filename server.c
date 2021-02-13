@@ -327,7 +327,7 @@ int send_message_server(int sock)	//Получение сообщения сер
 	//Время получения сообщения сервером
 	time_t timer = time(NULL);
 	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
-	printf(DIM BLUE"%s\n", s_time);
+	printf(DEFAULT BLUE"%s\n", s_time);
 	//Никнейм отправителя
 	get_message(sock, nickname);
 	printf(DEFAULT BRIGHT" %s\n", nickname);

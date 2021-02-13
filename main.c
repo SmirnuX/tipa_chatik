@@ -2,16 +2,16 @@
 #include "main.h"
 
 const char *server_cmd_strings[CMD_COUNT] = { //Команды, выполняемые на сервере
-    "/getrooms",    //Получение списка комнат.      Синтаксис: /getrooms.
-    "/sendmessage", //Отправка сообщения на сервер. Синтаксис: /sendmessage <room> <nickname> <message>
-    "/getnewmessages",  //Получение новых сообщений с сервера. Синтаксис: /getnewmessages <room> <number> (number - количество уже имеющихся сообщений)
-    "/getname",  //Получение наименования сервера
+	"/getrooms",    //Получение списка комнат.      Синтаксис: /getrooms.
+	"/sendmessage", //Отправка сообщения на сервер. Синтаксис: /sendmessage <room> <nickname> <message>
+	"/getnewmessages",  //Получение новых сообщений с сервера. Синтаксис: /getnewmessages <room> <number> (number - количество уже имеющихся сообщений)
+	"/getname",  //Получение наименования сервера
 };  //Команды для взаимодействия клиент - сервер
 int (*server_cmd_functions[CMD_COUNT])(int sock) = {  //Соответствующие им функции сервера
-    get_rooms_server,
-    send_message_server,
-    get_new_messages_server,
-    get_name_server,
+	get_rooms_server,
+	send_message_server,
+	get_new_messages_server,
+	get_name_server,
 };
 long server_time;    //Время запуска сервера
 
@@ -47,8 +47,7 @@ int main(int argc, char* argv[])
     int config;
     int sock;
     int running = 1;
-    while (running)
-    {
+	while (running == 1)	{
         if (!edit_config)
         {
             printf("\tЗагрузка файла конфигурации...\n");
@@ -256,7 +255,7 @@ int read_messages(int room)	//Вывод всех сообщений из фай
     int i;
 	for (i = 0; read_single_message(room, &message) != 1; i++)
 	{	  
-        printf(DIM BLUE"%s\n", message.datetime);
+        printf(DEFAULT BLUE"%s\n", message.datetime);
         printf(DEFAULT BRIGHT" %s\n", message.nickname);
         printf(DEFAULT"%s\n\n", message.msg_text);	
 	}	

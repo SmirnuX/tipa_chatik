@@ -12,7 +12,8 @@ int client(struct s_connection* connection)
         if (errno == ENOENT)    //Если папка не существует
         {
             errno = 0;
-            mkdir("client_history", PERMISSION);
+            mkdir("client_history", FOLDERPERMISSION);
+            chdir("client_history");
         }
         if (errno != 0) //Для всех остальных ошибок, либо при ошибке при создании папки
         {

@@ -46,7 +46,8 @@ int main(int argc, char* argv[])
     int edit_config = 0;
     int config;
     int sock;
-    while (1)
+    int running = 1;
+    while (running)
     {
         if (!edit_config)
         {
@@ -109,6 +110,7 @@ int main(int argc, char* argv[])
                 printf ("Ошибка ввода никнейма.\n\n");
                 continue;
             }
+            remove_new_line(nickname);
         }
         port = atoi(port_str);
         //Проверка введенных данных на корректность
@@ -141,6 +143,8 @@ int main(int argc, char* argv[])
             write(config, port_str, strlen(port_str));
             write(config, "\n", sizeof(char));
             write(config, nickname, strlen(nickname));
+            close(config);
+            edit_config = 0;
         }
         printf("Будет использована следующая конфигурация:\n"
             "\t IP сервера: \t%s:%i\n"
@@ -173,10 +177,13 @@ int main(int argc, char* argv[])
             switch (getchar())
             {
                 case '0':
-                return 0;
+                running = 0;
+                break;
                 case '2':
                 edit_config = 1;
             }
+            if (!running)
+                break;
             while (getchar() != '\n');   //Очистка буфера
             clear()
             errno = 0;
@@ -187,9 +194,10 @@ int main(int argc, char* argv[])
                 client(&connection);
             else
                 server(&connection);
-            return 0;
+            running = 0;
         }  
     }
+    //TODO - вставить очистку памяти
     return 0;
 }
 

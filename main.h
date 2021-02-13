@@ -18,6 +18,7 @@
 
 //Константы
 #define PERMISSION 0666	//Разрешения для создаваемых файлов
+#define FOLDERPERMISSION 0777   //Разрешения для создаваемых папок
 #define MAXIPLEN 15 //Максимальная длина IP адреса
 #define MAXPORTLEN 5    //Максимальная длина порта
 #define MAXNICKLEN 64   //Максимальная длина никнейма

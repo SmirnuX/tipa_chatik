@@ -1,4 +1,4 @@
-objects = main.c client.c server.c
+objects = src/main.c src/client.c src/server.c
 output = tchat
 
 all:

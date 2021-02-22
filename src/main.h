@@ -118,8 +118,10 @@ int send_file_server(int sock);
 
 //Функции для обмена произвольными сообщениями между клиентом и сервером
 int send_data_safe(struct s_connection* connection, char* str); //Отправка произвольного сообщения str с попыткой переподключения в случае неудачи
+int send_ndata_safe(struct s_connection* connection, char* str, int n);  //Отправка сообщения str длиной n с попыткой переподключения в случае неудачи
 int send_data(int sock, char* str);  //Отправка произвольного сообщения str БЕЗ попытки переподключения
-char* get_message(int socket, char* str);   //Прием произвольного сообщения
+char* get_data(int socket, char* str);   //Прием произвольного сообщения
+char* get_ndata(int socket, char* str, int n);  //Прием сообщения размером n. В случае неудачи записывает в конце принятой части сообщения \0
 
 //Функции для работы с сообщениями, сохраненными в файле
 int get_string(char* buf, int maxlen, int fd);  //Получение строки из файла. При возникновении ошибки возвращает -1

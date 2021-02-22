@@ -305,7 +305,7 @@ int server(struct s_connection* connection)
 						if (n != 0)
 						{
 							//Считывание команды и ее выполнение
-							get_message(fd, buf);
+							get_data(fd, buf);
 							//Идентификация команды
 							for (int j = 0; j < CMD_COUNT; j++)	
 							{
@@ -314,7 +314,7 @@ int server(struct s_connection* connection)
 									printf("[%i]Выполняется %s \n",fd ,buf);
 									snprintf(buf, MAXBUFFER, "%li", server_time);
 									send_data(fd, buf);	//Отправляем "версию" сервера
-									get_message(fd, buf);
+									get_data(fd, buf);
 									if (buf[0] != '0')	//Если "версия" сервера совпадает с клиентом - выполняем команду
 										server_cmd_functions[j](fd);	
 									break;
@@ -368,17 +368,17 @@ int get_name_server(int sock)  //Отправка наименования се�
 int send_message_server(int sock)	//Получение сообщения сервером через сокет sock
 {
 	char s_time[MAXBUFFER], nickname[MAXBUFFER], buf[MAXBUFFER];
-	get_message(sock, buf);	//Получение номера комнаты 
+	get_data(sock, buf);	//Получение номера комнаты 
 	int room = atoi(buf);
 	//Время получения сообщения сервером
 	time_t timer = time(NULL);
 	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
 	printf(DEFAULT BLUE"%s\n", s_time);
 	//Никнейм отправителя
-	get_message(sock, nickname);
+	get_data(sock, nickname);
 	printf(DEFAULT BRIGHT" %s\n", nickname);
 	//Сообщение
-	get_message(sock, buf);
+	get_data(sock, buf);
 	printf(DEFAULT"%s\n", buf);
 	write_message(rooms[room]->fd, s_time, nickname, buf, ++(rooms[room]->msg_count));
 }
@@ -387,9 +387,9 @@ int get_new_messages_server(int sock)	//Отправка недостаюших 
 {
     char buf[MAXBUFFER];
     //Получение комнаты
-	int room = atoi(get_message(sock, buf));
+	int room = atoi(get_data(sock, buf));
     //Получение количества сообщений
-    int count = atoi(get_message(sock, buf));	
+    int count = atoi(get_data(sock, buf));	
     //Отправка количества сообщений
     snprintf(buf, MAXBUFFER, "%i", rooms[room]->msg_count);
     send_data(sock, buf);
@@ -457,9 +457,9 @@ int get_files_server(int sock)
 	//Синтаксис: /getfiles <room> <pagenumber> (pagenumber - номер страницы из 10 файлов)
 	char buf[MAXBUFFER];
     //Получение комнаты
-	int room = atoi(get_message(sock, buf));
+	int room = atoi(get_data(sock, buf));
     //Получение номера страницы
-    int page = atoi(get_message(sock, buf));
+    int page = atoi(get_data(sock, buf));
     //Отправка количества файлов всего
     snprintf(buf, MAXBUFFER, "%i", rooms[room]->file_count);
     send_data(sock, buf);
@@ -478,9 +478,9 @@ int download_file_server(int sock)
 	//Загрузка файла с сервера. Синтаксис: /downloadfile <room> <number>
 	char buf[MAXBUFFER];
     //Получение комнаты
-	int room = atoi(get_message(sock, buf));
+	int room = atoi(get_data(sock, buf));
     //Получение номера файла
-    int number = atoi(get_message(sock, buf));
+    int number = atoi(get_data(sock, buf));
 	if (number > rooms[room]->file_count)
 	{
 		send_data(sock, "-1");
@@ -494,7 +494,7 @@ int download_file_server(int sock)
 	snprintf(buf, MAXBUFFER, "%li", size);
 	send_data(sock, buf);
 	int file = open(rooms[room]->file_names[number], O_RDONLY);
-	int sent_data = 0;
+	long sent_data = 0;
 	printf(	WHITE	"Отправка файла %s\n"
 			GREEN	"[                    ]    %%", rooms[room]->file_names[number]);
 	int read_count = 0;
@@ -515,6 +515,9 @@ int download_file_server(int sock)
 				printf(" ");
 		}
 		printf("] %3i%%", percent);
+		do
+			get_data(sock, buf);
+		while (buf[0] != '1');
 	}
 	while (read_count == MAXBUFFER-1); 	//TODO - вставить проверку на ошибки
 	close(file);
@@ -529,14 +532,14 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 	char filename[MAXBUFFER];
 	char nick[MAXNICKLEN];
     //Получение комнаты
-	int room = atoi(get_message(sock, buf));
+	int room = atoi(get_data(sock, buf));
 	//Получение никнейма отправителя
-	get_message(sock, buf);
+	get_data(sock, buf);
 	strncpy(nick, buf, MAXNICKLEN);
     //Получение названия файла
-    get_message(sock, buf);
+    get_data(sock, buf);
 	strncpy(filename, buf, MAXNICKLEN);
-	long size = atol(get_message(sock, buf));
+	long size = atol(get_data(sock, buf));
 	if (chdir(".files") == -1)
 	{
 		mkdir(".files", FOLDERPERMISSION);
@@ -548,16 +551,20 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 		chdir(rooms[room]->name);
 	}
 	int file = open(filename, O_CREAT | O_WRONLY, PERMISSION);
-	int received_data = 0;
+	long received_data = 0;
 	printf(	WHITE DEFAULT	"Получение файла %s\n"
 			GREEN			"[                    ]    %%", filename);
 	rooms[room]->file_names[ ++(rooms[room]->file_count) ] = malloc(sizeof(char)*MAXNICKLEN);
 	strncpy( rooms[room]->file_names[rooms[room]->file_count], filename, MAXNICKLEN);
-	for (int j = 0; j < size; j += MAXBUFFER-1)
+	for (received_data = 0; received_data < size; )
 	{
 		erase_line()
-		get_message(sock, buf);
-		received_data += write(file, buf, strlen(buf));
+		get_data(sock, buf);
+		int packet_size = atoi(buf);
+			printf("%i b - ", packet_size);
+		get_ndata(sock, buf, packet_size);
+		received_data += write(file, buf, packet_size);
+			printf("GOT %li of %li |", received_data, size);
 		printf("[");
 		int percent = received_data * 100 / size;
 		for (int i=0; i < 20; i++)
@@ -568,6 +575,8 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 				printf(" ");
 		}
 		printf("] %3i%%", percent);
+		send_data(sock, "1");
+			printf("SENT 1\n");
 	}
 	printf("\n");
 	close(file);

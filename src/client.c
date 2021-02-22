@@ -198,12 +198,12 @@ int get_rooms_client(struct s_connection* connection) //Получение сп�
     char buf[MAXBUFFER];
     strncpy(buf, "/getrooms", MAXBUFFER);
     send_data_safe(connection, buf);
-    server_time = atoi(get_message(connection->sock, buf)); //Получение "версии" сервера
+    server_time = atoi(get_data(connection->sock, buf)); //Получение "версии" сервера
     send_data_safe(connection, "1");
-    int count = atoi(get_message(connection->sock, buf));
+    int count = atoi(get_data(connection->sock, buf));
     for (int i=0; i<count; i++)
     {
-        get_message(connection->sock, buf);      
+        get_data(connection->sock, buf);      
         if (rooms[i] == NULL)	//Инициализация комнаты
         {
             rooms[i] = malloc(sizeof(struct s_room));
@@ -221,7 +221,7 @@ int send_message_client(struct s_connection* connection, int room, char* nicknam
     char buf[MAXBUFFER];
     strncpy(buf, "/sendmessage", MAXBUFFER);
     send_data_safe(connection, buf);
-    if (atoi(get_message(connection->sock, buf)) != server_time) //Проверка "версии" сервера
+    if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
@@ -244,7 +244,7 @@ int get_new_messages_client(struct s_connection* connection, int room, int count
     char buf[MAXBUFFER];   
     strncpy(buf, "/getnewmessages", MAXBUFFER);
     send_data_safe(connection, buf);
-    if (atoi(get_message(connection->sock, buf)) != server_time) //Проверка "версии" сервера
+    if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
@@ -257,15 +257,15 @@ int get_new_messages_client(struct s_connection* connection, int room, int count
     snprintf(buf, MAXBUFFER, "%i", count);
     send_data_safe(connection, buf);
     //Прием количества сообщений
-    int target_count = atoi(get_message(connection->sock, buf));
+    int target_count = atoi(get_data(connection->sock, buf));
     //Прием сообщений
     for(int i = count; i<target_count; i++)
     {
         char s_time[MAXBUFFER], nickname[MAXBUFFER], buf[MAXBUFFER];
 	    //Получение сообщения
-	    get_message(connection->sock, s_time);
-	    get_message(connection->sock, nickname);
-    	get_message(connection->sock, buf);
+	    get_data(connection->sock, s_time);
+	    get_data(connection->sock, nickname);
+    	get_data(connection->sock, buf);
         //Запись сообщения в файл
     	write_message(rooms[room]->fd, s_time, nickname, buf, ++(rooms[room]->msg_count));   
     }
@@ -277,9 +277,9 @@ char* get_name_client(struct s_connection* connection)  //Получение н�
     char buf[MAXBUFFER];
     strncpy(buf, "/getname", MAXBUFFER);
     send_data_safe(connection, buf);
-    get_message(connection->sock, buf); //Получение "версии" сервера - в этой команде не используется
+    get_data(connection->sock, buf); //Получение "версии" сервера - в этой команде не используется
     send_data_safe(connection, "1");
-    get_message(connection->sock, buf);
+    get_data(connection->sock, buf);
     char* res = malloc(sizeof(char)*MAXNICKLEN);
     strncpy(res, buf, MAXNICKLEN);
     return res;
@@ -287,10 +287,6 @@ char* get_name_client(struct s_connection* connection)  //Получение н�
 
 int send_data_safe(struct s_connection* connection, char* str) //Отправка произвольного сообщения str с попыткой переподключения в случае неудачи
 {
-    //Проверка соединения
-    fd_set connection_set;
-	struct timeval timeout;
-    //Попытка переподключиться
     while (send_data(connection->sock, str) <= 0)
     {
         printf("Соединению кранты\n");
@@ -303,7 +299,21 @@ int send_data_safe(struct s_connection* connection, char* str) //Отправк�
     return 0;
 }
 
-char* get_message(int socket, char* str)    //Прием произвольного сообщения
+int send_ndata_safe(struct s_connection* connection, char* str, int n)  //Отправка сообщения str длиной n с попыткой переподключения в случае неудачи
+{
+    while (write(connection->sock, str, n) <= 0)
+    {
+        printf("Соединению кранты\n");
+        close(connection->sock);
+        errno = 0;
+        connection->sock = socket(AF_INET, SOCK_STREAM, 0);
+        connect(connection->sock, connection->address, sizeof(*(connection->address)));
+        perror("Переподключение: ");
+    }
+    return 0;
+}
+
+char* get_data(int socket, char* str)    //Прием произвольного сообщения
 {
     int i;
     char temp;
@@ -321,12 +331,30 @@ char* get_message(int socket, char* str)    //Прием произвольно�
     return str;
 }
 
+char* get_ndata(int socket, char* str, int n)    //Прием сообщения размером n. В случае неудачи записывает в конце принятой части сообщения \0
+{
+    int i;
+    char temp;
+    for (i=0; i<n; i++)
+    {  
+        int j = read(socket, str+i, 1); 
+        if (j <= 0) 
+        {  
+            str[i] = '\0';
+            break;
+        }
+    }
+    return str;
+}
+
+
+
 int get_files_client(struct s_connection* connection, int room, int page)  //Получение списка файлов комнаты
 {
     char buf[MAXBUFFER];   
     strncpy(buf, "/getfiles", MAXBUFFER);
     send_data_safe(connection, buf);
-    if (atoi(get_message(connection->sock, buf)) != server_time) //Проверка "версии" сервера
+    if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
@@ -339,14 +367,14 @@ int get_files_client(struct s_connection* connection, int room, int page)  //П�
     snprintf(buf, MAXBUFFER, "%i", page);
     send_data_safe(connection, buf);
     //Получение количества файлов
-    int count = atoi(get_message(connection->sock, buf));
+    int count = atoi(get_data(connection->sock, buf));
     rooms[room]->file_count = count;
     //Получение списка файлов
 	for (int i = (page-1)*10; i < page*10; i++)
 	{	
 		if (i == count)
 			break;
-        get_message(connection->sock, buf);
+        get_data(connection->sock, buf);
         rooms[room]->file_names[i] = malloc(sizeof(char)*MAXNICKLEN);
 	    strncpy(rooms[room]->file_names[i], buf, MAXNICKLEN);
 	}
@@ -359,7 +387,7 @@ int download_file_client(struct s_connection* connection, int room, int number)
     char buf[MAXBUFFER];   
     strncpy(buf, "/downloadfile", MAXBUFFER);
     send_data_safe(connection, buf);
-    if (atoi(get_message(connection->sock, buf)) != server_time) //Проверка "версии" сервера
+    if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
@@ -373,15 +401,15 @@ int download_file_client(struct s_connection* connection, int room, int number)
     send_data_safe(connection, buf);
 	chdir("../downloads");
 	//Получение размера файла
-    long size = atol(get_message(connection->sock, buf));
+    long size = atol(get_data(connection->sock, buf));
 	int file = open(rooms[room]->file_names[number], O_CREAT | O_WRONLY, PERMISSION);
-	int received_data = 0;
+	long received_data = 0;
 	printf(	WHITE	"Получение файла %s\n"
 			GREEN	"[                    ]    %%", rooms[room]->file_names[number]);
-	for (int j = 0; j < size; j += MAXBUFFER-1)
+	for (received_data = 0; received_data < size; )
 	{
 		erase_line()
-		get_message(connection->sock, buf);
+		get_data(connection->sock, buf);
 		received_data += write(file, buf, strlen(buf));
 		printf("[");
 		int percent = received_data * 100 / size;
@@ -392,7 +420,8 @@ int download_file_client(struct s_connection* connection, int room, int number)
 			else
 				printf(" ");
 		}
-		printf("] %3i%%", percent);
+        printf("] %3i%%", percent);
+        send_data(connection->sock, "1");
 	}
 	close(file);
 	chdir("../client_history");
@@ -404,7 +433,7 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 	char buf[MAXBUFFER]; 
     strncpy(buf, "/sendfile", MAXBUFFER);
     send_data_safe(connection, buf);
-    if (atoi(get_message(connection->sock, buf)) != server_time) //Проверка "версии" сервера
+    if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
@@ -425,17 +454,21 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 	long size = stat_file.st_size;
     snprintf(buf, MAXBUFFER, "%li", size);
     send_data_safe(connection, buf);
-    int sent_data = 0;
+    long sent_data = 0;
 	printf(	WHITE	"Отправка файла %s\n"
 			GREEN	"[                    ]    %%", filename);
 	int read_count = 0;
 	do
 	{
 		erase_line()
-		read_count = read(file, buf, MAXBUFFER-1);
-		buf[MAXBUFFER-1] = '\0';
-		send_data_safe(connection, buf);
+		read_count = read(file, buf, MAXBUFFER);
+        char packet_size_str[MAXBUFFER];
+        snprintf(packet_size_str, MAXBUFFER, "%i", read_count);
+        send_data_safe(connection, packet_size_str);
+        send_ndata_safe(connection, buf, read_count);
+            printf("%i>", read_count);
 		sent_data += read_count;
+            printf("SENT %li of %li |", sent_data, size);
 		printf("[");
 		int percent = sent_data * 100 / size;
 		for (int i=0; i < 20; i++)
@@ -446,10 +479,13 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 				printf(" ");
 		}
 		printf("] %3i%%", percent);
+		get_data(connection->sock, buf);
+            printf("GOT %s\n", buf);
 	}
-	while (read_count == MAXBUFFER-1); 	//TODO - вставить проверку на ошибки
+	while (read_count == MAXBUFFER); 	//TODO - вставить проверку на ошибки
     printf("\n");
-	close(file);	
+	close(file);
+    pause();	
 }
 
 int client_ui_download_files(struct s_connection* connection, int* selected_room)

@@ -207,27 +207,40 @@ char* get_name_client(struct s_connection* connection)  //Получение н�
 
 int send_data_safe(struct s_connection* connection, char* str) //Отправка произвольного сообщения str с попыткой переподключения в случае неудачи
 {
+    int try = 0;
     while (send_data(connection->sock, str) <= 0)
     {
+        client_ui_reconnect(0);
         close(connection->sock);
         errno = 0;
         connection->sock = socket(AF_INET, SOCK_STREAM, 0);
-        connect(connection->sock, connection->address, sizeof(*(connection->address)));
+        int err = connect(connection->sock, connection->address, sizeof(*(connection->address)));
+        if (err != 0)
+        {
+            try++;
+            if (client_ui_reconnect(try) > 0)
+                return 1; 
+        }
     }
-    //TODO - вставить проверку на невозможность переподключиться. Или менюшку
     return 0;
 }
 
 int send_ndata_safe(struct s_connection* connection, char* str, int n)  //Отправка сообщения str длиной n с попыткой переподключения в случае неудачи
 {
+    int try = 0;
     while (write(connection->sock, str, n) <= 0)
     {
         close(connection->sock);
         errno = 0;
         connection->sock = socket(AF_INET, SOCK_STREAM, 0);
-        connect(connection->sock, connection->address, sizeof(*(connection->address)));
+        int err = connect(connection->sock, connection->address, sizeof(*(connection->address)));
+        if (err != 0)
+        {
+            try++;
+            if (client_ui_reconnect(try) > 0)
+                return 1; 
+        }
     }
-    //TODO - вставить проверку на невозможность переподключиться. Или менюшку
     return 0;
 }
 

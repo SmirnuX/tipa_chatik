@@ -32,6 +32,7 @@
 #define MAXQUEUE 5  //Максимальное количество соединений в очереди
 #define TIMEOUT_S 0
 #define TIMEOUT_MS 400 //Частота опроса сокета в микросекундах
+#define MAXRECONNECTRIES 128
 
 //Файлы конфигурации
 #define server_config "configs/serverconfig"
@@ -58,7 +59,12 @@
 #define SERVER_CHOOSE_ROOM_LINES 6
 #define SERVER_WRITE_MESSAGE_LINES 4
 #define SERVER_VIEW_FILES_LINES 6
+#define CLIENT_RECONNECT_LINES 6
+#define RECONNECT_FRAMES 2
+#define RECONNECT_FRAMELEN 29
 #define FILESPERPAGE 10 //Количество файлов на одной странице
+
+extern char reconnect_animation[RECONNECT_FRAMES][RECONNECT_FRAMELEN];
 
 //Структура сообщения
 struct s_message
@@ -155,9 +161,12 @@ int client_ui_select_action(int selected_room);
 int client_ui_send_message(int selected_room, struct s_connection* connection);
 int client_ui_send_file(int selected_room, struct s_connection* connection);
 int client_ui_download_files(struct s_connection* connection, int* selected_room);
+int client_ui_reconnect(int n);
 
 int server_ui_main_menu();
 int server_ui_create_room();
 int server_ui_send_message();
 int server_ui_delete_room();
 int server_ui_view_files();
+
+int client_ui_reconnect(int n);

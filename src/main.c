@@ -61,14 +61,13 @@ int main(int argc, char* argv[])
             {
                 if (errno == ENOENT)
                 {
-                    printf( 
-                    RED BRIGHT "Файл конфигурации не найден\n" WHITE DEFAULT);
+                    ui_show_error("Файл конфигурации не найден.", 1);
                     edit_config = 1;
                     errno = 0;
                 }
                 else
                 {
-                    perror("Ошибка открытия файла конфигурации: ");
+                    ui_show_error("Ошибка открытия файла конфигурации.", 1);
                     return 1;
                 }
             }
@@ -79,8 +78,7 @@ int main(int argc, char* argv[])
                 get_string(port_str, MAXPORTLEN, config) == -1 || 
                 get_string(nickname, MAXNICKLEN, config) == -1)
                 {
-                    printf( 
-                    RED BRIGHT "Файл конфигурации имеет неправильный формат\n" WHITE DEFAULT);
+                    ui_show_error("Файл конфигурации имеет неправильный формат.", 0);
                     edit_config = 1;
                 } 
             }   
@@ -91,7 +89,7 @@ int main(int argc, char* argv[])
             __fpurge(stdin);  //Очистка буфера        
             if (fgets(ipaddr, MAXIPLEN, stdin) == NULL)
             {
-                printf ("Ошибка ввода IP адреса.\n\n");
+                ui_show_error("Ошибка ввода IP адреса.", 0);
                 continue;
             }
             remove_new_line(ipaddr);
@@ -99,7 +97,7 @@ int main(int argc, char* argv[])
             printf("\tВведите порт, по которому будет производиться подключение\n>");
             if (fgets(port_str, MAXPORTLEN, stdin) == NULL)
             {
-                printf ("Ошибка ввода порта.\n\n");
+                ui_show_error("Ошибка ввода порта.", 0);
                 continue;
             }
             remove_new_line(port_str);
@@ -110,7 +108,7 @@ int main(int argc, char* argv[])
                 printf("\tВведите никнейм.\n>");
             if (fgets(nickname, MAXNICKLEN, stdin) == NULL)
             {
-                printf ("Ошибка ввода никнейма.\n\n");
+                ui_show_error("Ошибка ввода никнейма.", 0);
                 continue;
             }
             remove_new_line(nickname);
@@ -119,13 +117,13 @@ int main(int argc, char* argv[])
         //Проверка введенных данных на корректность
         if (inet_aton(ipaddr, &address.sin_addr) == 0)
         {
-            printf ("Неправильный формат IP адреса!\n\n");
+            ui_show_error("Неправильный формат IP адреса.", 0);
             edit_config = 1;
             continue;
         }
         if (port < 0 || port > 65535)
         {
-            printf ("Неправильный формат порта!\n\n");
+            ui_show_error("Неправильный формат порта.", 0);
             edit_config = 1;
             continue;
         }
@@ -137,7 +135,7 @@ int main(int argc, char* argv[])
             config = open(config_file, O_CREAT | O_WRONLY, PERMISSION);
             if (config < 0)
             {
-                perror("Ошибка создания файла конфигурации: ");
+                ui_show_error("Ошибка создания файла конфигурации.", 1);
                 return 1;
             }
             //Запись строк в файл
@@ -212,7 +210,7 @@ int get_string(char *buf, int maxlen, int fd)   //Получение строк�
         switch (read(fd, buf + i, 1))
         {
             case -1:
-                perror("Ошибка файла конфигурации: ");
+                ui_show_error("Ошибка файла конфигурации.", 1);
                 return -1;
                 break;
             case 0:
@@ -226,7 +224,7 @@ int get_string(char *buf, int maxlen, int fd)   //Получение строк�
         }
         else if (i == maxlen)
         {
-            printf("Ошибка файла конфигурации: неправильный формат.\n");
+            ui_show_error("Ошибка файла конфигурации: неправильный формат.", 0);
             return -1;
         }
     }

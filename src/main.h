@@ -53,10 +53,11 @@
 #define erase_line() printf("\r\033[K\r");  //Стереть строку
 
 //Количество строк в меню:
-#define SERVER_MENU_LINES 7   
+#define SERVER_MENU_LINES 8  
 #define SERVER_NEW_ROOM_LINES 5
 #define SERVER_CHOOSE_ROOM_LINES 6
 #define SERVER_WRITE_MESSAGE_LINES 4
+#define SERVER_VIEW_FILES_LINES 6
 #define FILESPERPAGE 10 //Количество файлов на одной странице
 
 //Структура сообщения
@@ -119,8 +120,8 @@ int send_file_server(int sock);
 //Функции для обмена произвольными сообщениями между клиентом и сервером
 int send_data_safe(struct s_connection* connection, char* str); //Отправка произвольного сообщения str с попыткой переподключения в случае неудачи
 int send_ndata_safe(struct s_connection* connection, char* str, int n);  //Отправка сообщения str длиной n с попыткой переподключения в случае неудачи
-int send_data(int sock, char* str);  //Отправка произвольного сообщения str БЕЗ попытки переподключения
-char* get_data(int socket, char* str);   //Прием произвольного сообщения
+int send_data(int sock, char* str);  //Отправка произвольного сообщения str (до \0) БЕЗ попытки переподключения
+char* get_data(int socket, char* str);   //Прием произвольного сообщения (до \0)
 char* get_ndata(int socket, char* str, int n);  //Прием сообщения размером n. В случае неудачи записывает в конце принятой части сообщения \0
 
 //Функции для работы с сообщениями, сохраненными в файле
@@ -142,8 +143,21 @@ void rooms_sort();	//Сортировка списка комнат
 void rooms_swap(int a, int b);  //Обмен комнат под номерами a и b местами
 
 //Вспомогательные функции
+void refresh_files_room(int room);	//Обновить список файлов, хранящихся в комнате
 void remove_new_line(char* str); //Убирает последний символ новой строки (если есть)
 void erase_lines(int n);    //Перемещение курсора на n строк наверх (и удаление этих строк)
 
 //Функции интерфейса
+int ui_show_error(char* error, int show_errno);
+
+int client_ui_select_room(char* server_name);
+int client_ui_select_action(int selected_room);
+int client_ui_send_message(int selected_room, struct s_connection* connection);
+int client_ui_send_file(int selected_room, struct s_connection* connection);
 int client_ui_download_files(struct s_connection* connection, int* selected_room);
+
+int server_ui_main_menu();
+int server_ui_create_room();
+int server_ui_send_message();
+int server_ui_delete_room();
+int server_ui_view_files();

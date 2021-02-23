@@ -17,7 +17,7 @@ int client(struct s_connection* connection)
         }
         if (errno != 0) //Для всех остальных ошибок, либо при ошибке при создании папки
         {
-            perror(RED "Ошибка открытия папки \"client_history\"");
+            ui_show_error("Ошибка открытия папки \"client_history\".", 1);
             return 0;
         }
     }
@@ -36,11 +36,8 @@ int client(struct s_connection* connection)
                 server_name = NULL;
             }
             server_name = get_name_client(connection);
-            //Получение списка комнат
-            printf( WHITE BRIGHT "\n============================================================\n"
-            DEFAULT "\t\tСписок комнат сервера %s\n", server_name);            
-            get_rooms_client(connection);
-            for (int i = 0; i < MAXROOMS; i++)
+            get_rooms_client(connection);   //Получение списка комнат
+            for (int i = 0; i < MAXROOMS; i++)  //Закрытие ранее открытых файлов
             {
                 if (rooms[i] == NULL)
                     continue;
@@ -50,25 +47,9 @@ int client(struct s_connection* connection)
                     rooms[i]->fd = -1;
                 }
             }
-            for (int i = 0; i < room_count; i++)
-            {
-                rooms[i]->fd = open(rooms[i]->name, O_CREAT | O_RDWR, PERMISSION);  //Создание файлов истории
-                lseek(rooms[i]->fd, 0, SEEK_SET);
-                rooms[i]->msg_count = count_messages(rooms[i]->fd);
-                printf("\t%i. %s (%i сохр. сообщ-й)\n", i+1, rooms[i]->name, rooms[i]->msg_count);
-            }
-            printf( BRIGHT  "\t0. Закрыть программу\n"
-                            "============================================================\n"
-                    DEFAULT "Введите номер выбранной комнаты: ");
-            char buf[MAXBUFFER];
-            fgets(buf, MAXBUFFER, stdin);
-            int choice = atoi(buf);
-            if (choice < 0 || choice > room_count || (choice == 0 && buf[0] != '0'))
-            {
-                clear()
-                printf(BRIGHT RED"Неправильно набран номер комнаты.\n\n"DEFAULT WHITE);
+            int choice = client_ui_select_room(server_name);    //Вывод списка комнат
+            if (choice < 0)
                 continue;
-            }
             if (choice == 0)
                 break;
             else
@@ -76,8 +57,7 @@ int client(struct s_connection* connection)
         }
         else
         {
-            printf("\tСообщения %s\n\n", rooms[selected_room]->name);
-            //Отображение истории сообщений
+            //Получение истории сообщений
             if (get_new_messages_client(connection, selected_room, rooms[selected_room]->msg_count) == ECONNREFUSED)
             {
                 clear()
@@ -85,95 +65,32 @@ int client(struct s_connection* connection)
                 selected_room = -1;
                 continue;
             }
-            lseek(rooms[selected_room]->fd, 0, SEEK_SET);
-            clear()
-            read_messages(rooms[selected_room]->fd);
-            //===Меню выбора действия===
-            printf( WHITE BRIGHT "============================================================\n"
-            DEFAULT "\tДействия в \"%s\"\n"
-                    "\t1. Написать сообщение\n"
-                    "\t2. Обновить\n"
-                    "\t3. Загрузить файл на сервер\n"
-                    "\t4. Скачать файл с сервера\n"
-            BRIGHT  "\t0. Выйти из комнаты\n"
-                    "============================================================\n"
-            DEFAULT "Введите номер выбранного действия: ", rooms[selected_room]->name);
-            char choice = getchar();
-            while (getchar() !='\n');   //Очистка буфера
+            int choice = client_ui_select_action(selected_room);    //Вывод истории сообщений и меню выбора действий
             int error;
             char buf[MAXBUFFER];    
             switch (choice)
             {
-                case '0':   //Возвращение к списку комнат
+                case 0:   //Возвращение к списку комнат
                 selected_room = -1;
                 clear()
                 break;
-                case '1':   //Переход к написанию сообщений
+                case 1:   //Переход к написанию сообщений
                 clear()
-                if (get_new_messages_client(connection, selected_room, rooms[selected_room]->msg_count) == ECONNREFUSED)
+                if (client_ui_send_message(selected_room, connection) < 0)
                 {
-                    clear()
                     printf ("Произошли изменения на сервере. Переподключение...\n\n");
                     selected_room = -1;
-                    break;
                 }
-                lseek(rooms[selected_room]->fd, 0, SEEK_SET);
-                read_messages(rooms[selected_room]->fd);
-                printf( 
-                WHITE BRIGHT"=======================================================================\n"
-                DEFAULT     "\tВведите сообщение и нажмите ENTER для отправки сообщения\n"
-                DIM         "\tДля отмены отправки сообщения сотрите все символы и нажмите ENTER.\n"
-                WHITE BRIGHT"=======================================================================\n"
-                DEFAULT);
-                if (fgets(buf, MAXBUFFER, stdin) > 0)
-                    if (buf[0] != '\n')
-                    {
-                        __fpurge(stdin);    //Очистка буфера
-                        if (send_message_client(connection, selected_room, nickname, buf) == ECONNREFUSED)
-                        {
-                            clear()
-                            printf ("Произошли изменения на сервере. Переподключение...\n\n");
-                            selected_room = -1;
-                        }
-                    }
                 break;
-                case '2':   //Обновление сообщений
+                case 2:   //Обновление сообщений
                 clear()
                 continue;
-                case '3':   //Загрузка файла на сервер
+                case 3:   //Загрузка файла на сервер
                 clear()
-                chdir("..");
-                getcwd(buf, MAXBUFFER);
-                printf( 
-                WHITE BRIGHT"=======================================================================\n"
-                DEFAULT     "\tВведите путь к загружаемому файлу и ENTER для отправки файла\n"
-                DIM         "\tДля отмены отправки файла сотрите все символы и нажмите ENTER.\n"
-                            "\tФайлы должны находиться в директории с чатом: %s\n"
-                WHITE BRIGHT"=======================================================================\n"
-                DEFAULT, buf);
-                if (fgets(buf, MAXBUFFER, stdin) > 0)
-                    if (buf[0] != '\n')
-                    {
-                        __fpurge(stdin);    //Очистка буфера
-                        remove_new_line(buf);
-                        int file = open(buf, O_RDONLY);
-                        if (file < 0)
-                        {
-                            clear()
-                            perror("Ошибка открытия файла: ");
-                            errno = 0;
-                            pause();
-                        }
-                        else if (send_file_client(connection, selected_room, file, buf) == ECONNREFUSED)
-                        {
-                            clear()
-                            printf ("Произошли изменения на сервере. Переподключение...\n\n");
-                            selected_room = -1;
-                        }
-                    }
-                chdir("client_history");
+                if (client_ui_send_file(selected_room, connection) < 0)
+                    selected_room = -1;
                 break;
-                case '4':   //Загрузка файлов с сервера
+                case 4:   //Загрузка файлов с сервера
                 client_ui_download_files(connection, &selected_room);
                 break; 
             }
@@ -185,6 +102,9 @@ int client(struct s_connection* connection)
 		{
             if (rooms[i]->fd != -1)
                 close(rooms[i]->fd);
+            for (int j=0; j < MAXROOMS; j++)
+				if (rooms[i]->file_names[j] == NULL)
+					free(rooms[i]->file_names[j]);
 			free(rooms[i]->name);
 			free(rooms[i]);
 		}
@@ -289,13 +209,12 @@ int send_data_safe(struct s_connection* connection, char* str) //Отправк�
 {
     while (send_data(connection->sock, str) <= 0)
     {
-        printf("Соединению кранты\n");
         close(connection->sock);
         errno = 0;
         connection->sock = socket(AF_INET, SOCK_STREAM, 0);
         connect(connection->sock, connection->address, sizeof(*(connection->address)));
-        perror("Переподключение: ");
     }
+    //TODO - вставить проверку на невозможность переподключиться. Или менюшку
     return 0;
 }
 
@@ -303,13 +222,12 @@ int send_ndata_safe(struct s_connection* connection, char* str, int n)  //Отп
 {
     while (write(connection->sock, str, n) <= 0)
     {
-        printf("Соединению кранты\n");
         close(connection->sock);
         errno = 0;
         connection->sock = socket(AF_INET, SOCK_STREAM, 0);
         connect(connection->sock, connection->address, sizeof(*(connection->address)));
-        perror("Переподключение: ");
     }
+    //TODO - вставить проверку на невозможность переподключиться. Или менюшку
     return 0;
 }
 
@@ -402,6 +320,14 @@ int download_file_client(struct s_connection* connection, int room, int number)
 	chdir("../downloads");
 	//Получение размера файла
     long size = atol(get_data(connection->sock, buf));
+    //Получаем код ошибки
+    get_data(connection->sock, buf);
+    if (buf[0] != '0')
+    {
+        chdir("../client_history");
+        ui_show_error("Файл удален с сервера.", 0);
+        return 1;
+    }
 	int file = open(rooms[room]->file_names[number], O_CREAT | O_WRONLY, PERMISSION);
 	long received_data = 0;
 	printf(	WHITE	"Получение файла %s\n"
@@ -410,7 +336,9 @@ int download_file_client(struct s_connection* connection, int room, int number)
 	{
 		erase_line()
 		get_data(connection->sock, buf);
-		received_data += write(file, buf, strlen(buf));
+		int packet_size = atoi(buf);
+		get_ndata(connection->sock, buf, packet_size);
+		received_data += write(file, buf, packet_size);
 		printf("[");
 		int percent = received_data * 100 / size;
 		for (int i=0; i < 20; i++)
@@ -423,6 +351,8 @@ int download_file_client(struct s_connection* connection, int room, int number)
         printf("] %3i%%", percent);
         send_data(connection->sock, "1");
 	}
+    erase_line()
+    printf("Файл загружен.\n");
 	close(file);
 	chdir("../client_history");
 }
@@ -454,6 +384,22 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 	long size = stat_file.st_size;
     snprintf(buf, MAXBUFFER, "%li", size);
     send_data_safe(connection, buf);
+    //Получаем код ошибки
+    get_data(connection->sock, buf);
+    if (buf[0] != '0')
+    {
+        switch (buf[0])
+        {
+            case '1':
+            ui_show_error("Файл с таким названием уже существует в этой комнате.", 0);
+            break;
+            case '2':
+            ui_show_error("Достигнуто максимальное количество файлов в этой комнате.", 0);
+            break;          
+        }
+        close(file);
+        return 1;
+    }
     long sent_data = 0;
 	printf(	WHITE	"Отправка файла %s\n"
 			GREEN	"[                    ]    %%", filename);
@@ -466,9 +412,7 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
         snprintf(packet_size_str, MAXBUFFER, "%i", read_count);
         send_data_safe(connection, packet_size_str);
         send_ndata_safe(connection, buf, read_count);
-            printf("%i>", read_count);
 		sent_data += read_count;
-            printf("SENT %li of %li |", sent_data, size);
 		printf("[");
 		int percent = sent_data * 100 / size;
 		for (int i=0; i < 20; i++)
@@ -480,78 +424,8 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 		}
 		printf("] %3i%%", percent);
 		get_data(connection->sock, buf);
-            printf("GOT %s\n", buf);
 	}
 	while (read_count == MAXBUFFER); 	//TODO - вставить проверку на ошибки
     printf("\n");
 	close(file);
-    pause();	
-}
-
-int client_ui_download_files(struct s_connection* connection, int* selected_room)
-{
-    int page = 1;
-    //int running = 1;
-    while (1)
-    {
-        //Получение списка файлов с сервера
-        if (get_files_client(connection, *selected_room, page) == ECONNREFUSED)
-        {
-            clear()
-            printf ("Произошли изменения на сервере. Переподключение...\n\n");
-            *selected_room = -1;
-            return -1;
-        }
-        printf( WHITE BRIGHT "\n============================================================\n"
-                DEFAULT "\t\tСписок файлов %s\n", rooms[*selected_room]->name);            
-        //Вывод списка
-        for (int i = (page-1)*FILESPERPAGE; i < page*FILESPERPAGE; i++)
-        {	
-            if (i == MAXFILES || i == rooms[*selected_room]->file_count)
-                break;
-            printf("%i. %s\n", i+1, rooms[*selected_room]->file_names[i]);
-        }
-
-        printf( BRIGHT  "\t0. Отменить выбор файла\n");
-        if (page == 1)
-            printf(DIM);
-        printf("\t<A"DEFAULT"\t Страница %i из %i \t", page, rooms[*selected_room]->file_count/FILESPERPAGE + 1);              
-        if (page == rooms[*selected_room]->file_count/FILESPERPAGE + 1)
-            printf(DIM);
-        printf("D>\n"   BRIGHT "============================================================\n"
-                DEFAULT "Введите номер выбранного файла или A/D для перехода на другую страницу: ");
-        char buf[MAXBUFFER];
-        fgets(buf, MAXBUFFER, stdin);
-        int choice = atoi(buf);
-        switch(buf[0])
-        {
-            case 'A':
-            if (page != 0)
-                page--;
-            break;
-            case 'D':
-            if (page  < rooms[*selected_room]->file_count/FILESPERPAGE)
-                page++;
-            break;
-            case '0':
-            return 0;
-            break;
-            default:
-            if (choice <= 0 || choice > rooms[*selected_room]->file_count)
-            {
-                clear()
-                printf(BRIGHT RED"Неправильно набран номер файла.\n\n"DEFAULT WHITE);
-                continue;
-            }
-            else if (download_file_client(connection, *selected_room, choice-1) == ECONNREFUSED)
-            {
-                clear()
-                printf ("Произошли изменения на сервере. Переподключение...\n\n");
-                *selected_room = -1;
-                return -1;
-            }       
-        }
-  
-    }
-
 }

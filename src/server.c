@@ -10,8 +10,13 @@ int server(struct s_connection* connection)
     DIR* directory = opendir("server_history");
 	if (directory==NULL)
 	{
-		printf("Ошибка открытия директории \"server_history\"");
-		return 2;
+		mkdir(".files", FOLDERPERMISSION);
+		directory = opendir("server_history");
+		if (directory==NULL)
+		{
+			ui_show_error("Ошибка открытия директории \"server_history\".", 1);
+			return 2;
+		}
 	}
 	chdir("server_history");	//Переходим в эту директорию
 	struct dirent* dir_ptr;
@@ -28,42 +33,11 @@ int server(struct s_connection* connection)
 				{
 					rooms[room_count] = malloc(sizeof(struct s_room));
 					rooms[room_count]->name = malloc(sizeof(char) * MAXNICKLEN);
+					for (int i=0; i < MAXROOMS; i++)
+						rooms[room_count]->file_names[i] = NULL;
 				}
 				strncpy(rooms[room_count]->name,(*dir_ptr).d_name, MAXNICKLEN);
-				if (chdir(".files") != 0);
-				{
-					if (errno == ENOENT)
-					{
-						mkdir(".files", FOLDERPERMISSION);
-						chdir(".files");
-						errno = 0;
-					}
-				}
-				//Поиск загруженных в комнату файлов
-				DIR* internal_directory = opendir(rooms[room_count]->name);
-				chdir(rooms[room_count]->name);
-				rooms[room_count]->file_count = 0;
-				if (internal_directory != NULL)
-				{
-					struct dirent* internal_dir_ptr;
-					internal_dir_ptr=readdir(internal_directory);
-					while (internal_dir_ptr!=NULL)	
-					{
-						if ((*internal_dir_ptr).d_name[0] != '.')	//Пропуск скрытых файлов
-						{
-							if (rooms[room_count]->file_count < MAXFILES - 1)
-							{
-								rooms[room_count]->file_names[rooms[room_count]->file_count] = malloc(sizeof(char)*MAXNICKLEN);	//Выделение памяти
-								strncpy(rooms[room_count]->file_names[rooms[room_count]->file_count], (*internal_dir_ptr).d_name, MAXNICKLEN);
-								rooms[room_count]->file_count++;
-							}
-							else
-								break;
-						}
-						internal_dir_ptr=readdir(internal_directory);
-					}
-				}
-				chdir("../..");
+				refresh_files_room(room_count);
 				rooms[room_count]->fd = open(rooms[room_count]->name, O_RDWR);
 				rooms[room_count]->msg_count = count_messages(rooms[room_count]->fd);
 				room_count++;
@@ -94,19 +68,12 @@ int server(struct s_connection* connection)
     while (running)
     {
 		char buf[MAXBUFFER];
-		printf(	DEFAULT BRIGHT 	
-						"============================================================\n"	
-				DEFAULT	"Доступны следующие функции:\n"
-						"1. Создать новую комнату\n"
-						"2. Написать сообщение в одну из комнат\n"
-						"3. Удалить комнату\n"
-				BRIGHT	"0. Закрыть сервер\n"
-						"============================================================\n" DIM);
-		erase_lines(SERVER_MENU_LINES);
 		int n = 0;
 		ioctl(STDIN_FILENO, FIONREAD, &n);	//Считываем количество бит, которые можно прочитать
+		server_ui_main_menu();
 		if (n != 0)
 		{
+			
 			int choice = getchar();
 			prev_line()
 			erase_line()
@@ -116,141 +83,16 @@ int server(struct s_connection* connection)
 				switch (choice)
 				{
 					case '1':	////===Создание новой комнаты===	
-					printf( DEFAULT
-							WHITE BRIGHT "============================================================\n"
-							DEFAULT "\tСоздание новой комнаты\n"
-							DIM		"Введите название комнаты и нажмите ENTER.\n"
-									"Для отмены создания комнаты сотрите все символы и нажмите ENTER\n"
-							BRIGHT  "============================================================\n" DEFAULT);
-					if (fgets(buf, MAXBUFFER, stdin) > 0)
-					{
-						erase_lines(SERVER_NEW_ROOM_LINES + 1);
-						if (buf[0] != '\n')
-						{
-							remove_new_line(buf);
-							if (room_count == MAXROOMS)
-							{
-								printf(RED "\n Достигнуто максимальное количество комнат.\n" WHITE);
-							}
-							else
-							{
-								int i;
-								for (i = 0; i < room_count; i++)
-								{
-									if (strcmp(buf, rooms[i]->name) == 0)
-										break;
-								}
-								if (i < room_count)	//Если найдено совпадение
-								{
-									printf(RED "\n Комната с таким названием уже существует.\n" WHITE);
-								}
-								else
-								{
-									if (rooms[room_count+1] == NULL)	//Инициализация комнаты
-									{
-										rooms[room_count+1] = malloc(sizeof(struct s_room));
-										rooms[room_count+1]->name = malloc(sizeof(char) * MAXNICKLEN);
-									}
-									strncpy(rooms[room_count+1]->name, buf, MAXNICKLEN);
-									rooms[room_count+1]->fd = open(buf, O_CREAT | O_RDWR, PERMISSION);
-									if (rooms[room_count+1]->fd < 0)
-									{
-										perror(RED "\n Ошибка создания комнаты:" WHITE);
-										free(rooms[room_count+1]->name);
-										free(rooms[room_count+1]);
-									}
-									else
-									{
-										room_count++;
-										server_time = time(NULL);	//Обновление "версии" сервера
-										printf(	"\n Добавлена комната %s.\n"
-												"Время обновления: %li\n", rooms[room_count]->name, server_time);
-										rooms_sort();
-									}
- 								}
-							}
-						}
-					}
+					server_ui_create_room();
 					break;
 					case '2':	//===Отправка сообщения===
-					printf( DEFAULT
-							WHITE BRIGHT "\n============================================================\n"
-							DEFAULT "\t\tСписок комнат сервера %s\n", nickname);            
-					for (int i = 0; i < room_count; i++)
-						printf("%i.%s (%li байт, %i сообщений)\n", i+1, rooms[i]->name, lseek(rooms[i]->fd, 0, SEEK_END), rooms[i]->msg_count);
-					printf( BRIGHT  "\t0. Отменить написание сообщения\n"
-							RED  	"На время написания сообщения работа сервера приостановлена\n"
-							WHITE	"============================================================\n"
-							DEFAULT "Введите номер выбранной комнаты: ");
-					fgets(buf, MAXBUFFER, stdin);
-					erase_lines(SERVER_CHOOSE_ROOM_LINES + 1 + room_count);
-					choice = atoi(buf);
-					if (choice < 0 || choice > room_count || (choice == 0 && buf[0] != '0'))
-					{
-						clear()
-						printf(BRIGHT RED"Неправильно набран номер комнаты.\n\n"DEFAULT WHITE);
-					}
-					else if (choice != 0)
-					{
-						choice--;
-						printf( DEFAULT
-								WHITE BRIGHT"=======================================================================\n"
-								DEFAULT     "\tВведите сообщение и нажмите ENTER для отправки сообщения\n"
-								DIM         "\tДля отмены отправки сообщения сотрите все символы и нажмите ENTER.\n"
-								WHITE BRIGHT"=======================================================================\n"
-								DEFAULT);  
-						if (fgets(buf, MAXBUFFER, stdin) > 0)
-						{
-							erase_lines(SERVER_WRITE_MESSAGE_LINES + 1);
-							if (buf[0] != '\n')
-							{
-								char s_time[MAXBUFFER];
-								time_t timer = time(NULL);
-								strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
-								buf[MAXBUFFER - 1] = '\0';
-								write_message(rooms[choice]->fd, s_time, nickname, buf, ++(rooms[choice]->msg_count));
-								printf(	"\n Сообщение отправлено.\n");
-							}
-						}
-					}
+					server_ui_send_message();
 					break;
-					case '3':	//===Удаление сообщения===
-					printf( WHITE BRIGHT "\n============================================================\n"
-							DEFAULT "\t\tСписок комнат сервера %s\n", nickname);            
-					for (int i = 0; i < room_count; i++)
-						printf("%i.%s (%li байт, %i сообщений)\n", i+1, rooms[i]->name, lseek(rooms[i]->fd, 0, SEEK_END), rooms[i]->msg_count);
-					printf( BRIGHT  "\t0. Отменить удаление комнаты\n"
-							RED  	"На время удаления комнаты работа сервера приостановлена\n"
-							WHITE	"============================================================\n"
-							DEFAULT "Введите номер удаляемой комнаты: ");
-					fgets(buf, MAXBUFFER, stdin);
-					erase_lines(SERVER_CHOOSE_ROOM_LINES + 1 + room_count);
-					choice = atoi(buf);
-					if (choice < 0 || choice > room_count || (choice == 0 && buf[0] != '0'))
-					{
-						clear()
-						printf(BRIGHT RED"Неправильно набран номер комнаты.\n\n"DEFAULT WHITE);
-					}
-					else if (choice != 0)
-					{
-						choice--;
-						close(rooms[choice]->fd);
-						if (remove(rooms[choice]->name) == -1)
-						{
-							perror( RED "Ошибка удаления: " WHITE);
-						}
-						else
-						{
-							server_time = time(NULL);	//Обновление "версии" сервера
-							printf(	"\n Удалена комната %s.\n"
-									"Время обновления: %li\n", rooms[choice]->name, server_time);
-							free(rooms[choice]->name);
-							free(rooms[choice]);
-							rooms[choice] = NULL;
-							rooms_sort();
-							room_count--;
-						}
-					}
+					case '3':	//===Просмотр файлов===
+					server_ui_view_files();
+					break;
+					case '4':	//===Удаление комнаты===
+					server_ui_delete_room();
 					break;
 					case '0':
 					printf("Закрытие сервера...\n");
@@ -338,6 +180,9 @@ int server(struct s_connection* connection)
 		{
 			if (rooms[i]->fd != -1)
                 close(rooms[i]->fd);
+			for (int j=0; j < MAXROOMS; j++)
+				if (rooms[i]->file_names[j] == NULL)
+					free(rooms[i]->file_names[j]);
 			free(rooms[i]->name);
 			free(rooms[i]);
 		}
@@ -458,6 +303,7 @@ int get_files_server(int sock)
 	char buf[MAXBUFFER];
     //Получение комнаты
 	int room = atoi(get_data(sock, buf));
+	refresh_files_room(room);
     //Получение номера страницы
     int page = atoi(get_data(sock, buf));
     //Отправка количества файлов всего
@@ -494,6 +340,14 @@ int download_file_server(int sock)
 	snprintf(buf, MAXBUFFER, "%li", size);
 	send_data(sock, buf);
 	int file = open(rooms[room]->file_names[number], O_RDONLY);
+	if (file < 0)
+	{
+		chdir("../..");
+		send_data(sock, "1");
+		refresh_files_room(room);
+		return -1;
+	}
+	send_data(sock, "0");
 	long sent_data = 0;
 	printf(	WHITE	"Отправка файла %s\n"
 			GREEN	"[                    ]    %%", rooms[room]->file_names[number]);
@@ -502,8 +356,10 @@ int download_file_server(int sock)
 	{
 		erase_line()
 		read_count = read(file, buf, MAXBUFFER-1);
-		buf[read_count] = '\0';
-		send_data(sock, buf);
+		char packet_size_str[MAXBUFFER];
+        snprintf(packet_size_str, MAXBUFFER, "%i", read_count);
+        send_data(sock, packet_size_str);
+        write(sock, buf, read_count);
 		sent_data += read_count;
 		printf("[");
 		int percent = sent_data * 100 / size;
@@ -515,14 +371,13 @@ int download_file_server(int sock)
 				printf(" ");
 		}
 		printf("] %3i%%", percent);
-		do
-			get_data(sock, buf);
-		while (buf[0] != '1');
+		get_data(sock, buf);
 	}
 	while (read_count == MAXBUFFER-1); 	//TODO - вставить проверку на ошибки
+	erase_line()
+	printf("Файл отправлен.\n");
 	close(file);
-	chdir("..");
-	chdir("..");
+	chdir("../..");
 }
 
 int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
@@ -550,21 +405,45 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 		mkdir(rooms[room]->name, FOLDERPERMISSION);
 		chdir(rooms[room]->name);
 	}
+	int error = 0;	//Код ошибки: 0 - ошибки нет, 1 - файл с таким названием уже есть, 2 - не хватает места в массиве
+	if (rooms[room]->file_count == MAXROOMS)
+		error = 2;
+	else
+	{
+		for (int i = 0; i < rooms[room]->file_count; i++)	
+		{
+			if (strcmp(rooms[room]->file_names[i], filename) == 0)
+			{
+				int t_file = open(rooms[room]->file_names[i], O_RDONLY);
+				if (t_file > 0)
+				{
+					close(t_file);
+					error = 1;
+				}
+				break;
+			}
+		}
+	}
+	snprintf(buf, MAXBUFFER, "%i", error);	//Отправка номера ошибки
+	send_data(sock, buf);
+	if (error != 0)
+	{
+		chdir("../..");
+		return 1;
+	}
 	int file = open(filename, O_CREAT | O_WRONLY, PERMISSION);
 	long received_data = 0;
 	printf(	WHITE DEFAULT	"Получение файла %s\n"
 			GREEN			"[                    ]    %%", filename);
-	rooms[room]->file_names[ ++(rooms[room]->file_count) ] = malloc(sizeof(char)*MAXNICKLEN);
-	strncpy( rooms[room]->file_names[rooms[room]->file_count], filename, MAXNICKLEN);
+	rooms[room]->file_names[ (rooms[room]->file_count) ] = malloc(sizeof(char)*MAXNICKLEN);
+	strncpy( rooms[room]->file_names[rooms[room]->file_count++], filename, MAXNICKLEN);
 	for (received_data = 0; received_data < size; )
 	{
 		erase_line()
 		get_data(sock, buf);
 		int packet_size = atoi(buf);
-			printf("%i b - ", packet_size);
 		get_ndata(sock, buf, packet_size);
 		received_data += write(file, buf, packet_size);
-			printf("GOT %li of %li |", received_data, size);
 		printf("[");
 		int percent = received_data * 100 / size;
 		for (int i=0; i < 20; i++)
@@ -576,9 +455,10 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 		}
 		printf("] %3i%%", percent);
 		send_data(sock, "1");
-			printf("SENT 1\n");
+		//TODO - проверка на удачную запись
 	}
-	printf("\n");
+	erase_line()
+	printf("Файл получен.\n");
 	close(file);
 	chdir("../..");
 	char s_time[MAXBUFFER];
@@ -588,3 +468,55 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 	write_message(rooms[room]->fd, s_time, nick, buf, ++(rooms[room]->msg_count));
 }
     
+void refresh_files_room(int room)	//Обновить список файлов, хранящихся в комнате
+{
+	if (chdir(".files") != 0)
+	{
+		if (errno == ENOENT)
+		{
+			mkdir(".files", FOLDERPERMISSION);
+			chdir(".files");
+			errno = 0;
+		}
+	}
+	DIR* internal_directory = opendir(rooms[room]->name);
+	//TODO - проверка на название комнат
+	if (chdir(rooms[room]->name) != 0)
+	{
+		if (errno == ENOENT)
+		{
+			mkdir(rooms[room]->name, FOLDERPERMISSION);
+			chdir(rooms[room]->name);
+			errno = 0;
+		}
+	}
+	rooms[room]->file_count = 0;
+	if (internal_directory != NULL)
+	{
+		struct dirent* internal_dir_ptr;
+		internal_dir_ptr=readdir(internal_directory);
+		while (internal_dir_ptr!=NULL)	
+		{
+			if ((*internal_dir_ptr).d_name[0] != '.')	//Пропуск скрытых файлов
+			{
+				if (rooms[room]->file_count < MAXFILES - 1)
+				{
+					if (rooms[room]->file_names[rooms[room]->file_count] == NULL)
+						rooms[room]->file_names[rooms[room]->file_count] = malloc(sizeof(char)*MAXNICKLEN);	//Выделение памяти
+					strncpy(rooms[room]->file_names[rooms[room]->file_count], (*internal_dir_ptr).d_name, MAXNICKLEN);
+					rooms[room]->file_count++;
+				}
+				else
+					break;
+			}
+			internal_dir_ptr=readdir(internal_directory);
+		}
+	}
+	closedir(internal_directory);
+	for (int i = rooms[room]->file_count; i < MAXROOMS; i++)
+	{
+		free(rooms[room]->file_names[i]);
+		rooms[room]->file_names[i] = NULL;
+	}
+	chdir("../..");
+}

@@ -497,7 +497,7 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 		printf("] %3i%%", percent);
 		get_data(connection->sock, buf);
 	}
-	while (read_count == MAXBUFFER); 	//TODO - вставить проверку на ошибки
+	while (read_count == MAXBUFFER); 	
     printf("\n");
 	close(file);
 }

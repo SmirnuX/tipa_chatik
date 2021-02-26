@@ -373,7 +373,7 @@ int download_file_server(int sock)
 		printf("] %3i%%", percent);
 		get_data(sock, buf);
 	}
-	while (read_count == MAXBUFFER-1); 	//TODO - вставить проверку на ошибки
+	while (read_count == MAXBUFFER-1);
 	erase_line()
 	printf("Файл отправлен.\n");
 	close(file);

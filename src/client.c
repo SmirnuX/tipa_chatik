@@ -129,6 +129,9 @@ int get_rooms_client(struct s_connection* connection) //Получение сп�
             rooms[i] = malloc(sizeof(struct s_room));
             rooms[i]->name = malloc(sizeof(char) * MAXNICKLEN);
             rooms[i]->fd = -1;
+            rooms[i]->file_count = 0;
+            for (int j = 0; j < MAXFILES; j++)
+                rooms[i]->file_names[j] = NULL;
         }
         strncpy(rooms[i]->name, buf, MAXNICKLEN);
     }
@@ -461,7 +464,10 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
             break;
             case '2':
             ui_show_error("Достигнуто максимальное количество файлов в этой комнате.", 0);
-            break;          
+            break;   
+            case '3':
+            ui_show_error("Файл слишком большого размера.", 0);
+            break;         
         }
         close(file);
         return 1;

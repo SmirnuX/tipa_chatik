@@ -405,7 +405,9 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 		mkdir(rooms[room]->name, FOLDERPERMISSION);
 		chdir(rooms[room]->name);
 	}
-	int error = 0;	//Код ошибки: 0 - ошибки нет, 1 - файл с таким названием уже есть, 2 - не хватает места в массиве
+	int error = 0;	//Код ошибки: 0 - ошибки нет, 1 - файл с таким названием уже есть, 2 - не хватает места в массиве, 3 - файл слишком большой
+	if (size > MAXFILESIZE)
+		error = 3;
 	if (rooms[room]->file_count == MAXROOMS)
 		error = 2;
 	else
@@ -455,7 +457,6 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 		}
 		printf("] %3i%%", percent);
 		send_data(sock, "1");
-		//TODO - проверка на удачную запись
 	}
 	erase_line()
 	printf("Файл получен.\n");

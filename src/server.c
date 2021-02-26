@@ -480,7 +480,6 @@ void refresh_files_room(int room)	//Обновить список файлов, 
 		}
 	}
 	DIR* internal_directory = opendir(rooms[room]->name);
-	//TODO - проверка на название комнат
 	if (chdir(rooms[room]->name) != 0)
 	{
 		if (errno == ENOENT)

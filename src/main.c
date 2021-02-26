@@ -87,7 +87,7 @@ int main(int argc, char* argv[])
         {
             printf("\tВведите IP адрес, по которому будет производиться подключение\n>");    
             __fpurge(stdin);  //Очистка буфера        
-            if (fgets(ipaddr, MAXIPLEN, stdin) == NULL)
+            if (tipa_gets(ipaddr, MAXIPLEN, STDIN_FILENO) == NULL)
             {
                 ui_show_error("Ошибка ввода IP адреса.", 0);
                 continue;
@@ -95,7 +95,7 @@ int main(int argc, char* argv[])
             remove_new_line(ipaddr);
             __fpurge(stdin);  //Очистка буфера
             printf("\tВведите порт, по которому будет производиться подключение\n>");
-            if (fgets(port_str, MAXPORTLEN, stdin) == NULL)
+            if (tipa_gets(port_str, MAXPORTLEN, STDIN_FILENO) == NULL)
             {
                 ui_show_error("Ошибка ввода порта.", 0);
                 continue;
@@ -106,7 +106,7 @@ int main(int argc, char* argv[])
                 printf("\tВведите наименование сервера.\n>");
             else
                 printf("\tВведите никнейм.\n>");
-            if (fgets(nickname, MAXNICKLEN, stdin) == NULL)
+            if (fgets(nickname, MAXNICKLEN, STDIN_FILENO) == NULL)
             {
                 ui_show_error("Ошибка ввода никнейма.", 0);
                 continue;

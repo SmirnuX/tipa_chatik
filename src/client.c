@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: CPOL-1.02
 #include "main.h"
+char* server_name = NULL;
 int client(struct s_connection* connection)
 {
-    char* server_name = NULL;
     int selected_room = -1; //Выбранная комната
     signal(SIGPIPE, SIG_IGN);	//Игнорируем ошибки при записи в сокет
 
@@ -210,7 +210,6 @@ int send_data_safe(struct s_connection* connection, char* str) //Отправк�
     int try = 0;
     while (send_data(connection->sock, str) <= 0)
     {
-        client_ui_reconnect(0);
         close(connection->sock);
         errno = 0;
         connection->sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -219,7 +218,7 @@ int send_data_safe(struct s_connection* connection, char* str) //Отправк�
         {
             try++;
             if (client_ui_reconnect(try) > 0)
-                return 1; 
+                return ERRCONNCLOSED; 
         }
     }
     return 0;
@@ -284,64 +283,109 @@ int get_files_client(struct s_connection* connection, int room, int page)  //П�
 {
     char buf[MAXBUFFER];   
     strncpy(buf, "/getfiles", MAXBUFFER);
-    send_data_safe(connection, buf);
+    if (send_data_safe(connection, buf) != 0)
+        return ERRCONNCLOSED;
     if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
     }
-    send_data_safe(connection, "1");
+    if (send_data_safe(connection, "1") != 0)
+        return ERRCONNCLOSED;
     //Отправка номера комнаты
     snprintf(buf, MAXBUFFER, "%i", room);
-    send_data_safe(connection, buf);
+    if (send_data_safe(connection, buf) != 0)
+        return ERRCONNCLOSED;
     //Отправка номера страницы
     snprintf(buf, MAXBUFFER, "%i", page);
-    send_data_safe(connection, buf);
+    if (send_data_safe(connection, buf) != 0)
+        return ERRCONNCLOSED;
     //Получение количества файлов
     int count = atoi(get_data(connection->sock, buf));
+    if ( (count == 0 && buf[0] != '0') || count < 0 || count > MAXROOMS)
+    {
+        ui_show_error("Неожиданный ответ сервера.", 0);
+        return ERRUNEXPECTANSWER;   
+    }
     rooms[room]->file_count = count;
+    if (count == 0)
+        return 0;
     //Получение списка файлов
 	for (int i = (page-1)*10; i < page*10; i++)
 	{	
-		if (i == count)
+		if (i >= count)
 			break;
         get_data(connection->sock, buf);
-        rooms[room]->file_names[i] = malloc(sizeof(char)*MAXNICKLEN);
+        if (rooms[room]->file_names[i] == NULL)
+            rooms[room]->file_names[i] = malloc(sizeof(char)*MAXNICKLEN);
 	    strncpy(rooms[room]->file_names[i], buf, MAXNICKLEN);
 	}
+    //Очистка памяти
+    for (int i = count; i < MAXFILES; i++)
+        if (rooms[room]->file_names[i] != NULL) 
+        {
+            free(rooms[room]->file_names[i]);
+            rooms[room]->file_names[i] = NULL;
+        }
 	return 0;
 }
+
+//TODO - сделать автоматическое обновление чата
 
 int download_file_client(struct s_connection* connection, int room, int number)
 {
 	//Загрузка файла с сервера. Синтаксис: /downloadfile <room> <number>
     char buf[MAXBUFFER];   
     strncpy(buf, "/downloadfile", MAXBUFFER);
-    send_data_safe(connection, buf);
+    if (send_data_safe(connection, buf) != 0)
+        return ERRCONNCLOSED;
     if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
         return ECONNREFUSED;    //Отказано в соединении
     }
-    send_data_safe(connection, "1");
+    if (send_data_safe(connection, "1") != 0)
+        return ERRCONNCLOSED;
     //Отправка номера комнаты
     snprintf(buf, MAXBUFFER, "%i", room);
-    send_data_safe(connection, buf);
+    if (send_data_safe(connection, buf) != 0)
+        return ERRCONNCLOSED;
     //Отправка номера страницы
     snprintf(buf, MAXBUFFER, "%i", number);
-    send_data_safe(connection, buf);
-	chdir("../downloads");
+    if (send_data_safe(connection, buf) != 0)
+        return ERRCONNCLOSED;
+	if (chdir("../downloads") < 0)
+    {
+        chdir("..");
+        mkdir("downloads", FOLDERPERMISSION);
+        if (chdir("downloads") < 0)
+        {
+            ui_show_error("Не получается перейти в папку downloads.", 1);
+            return ERRCONNCLOSED;
+        }
+    }
 	//Получение размера файла
     long size = atol(get_data(connection->sock, buf));
+    if (size < 0)
+    {
+        ui_show_error("Неожиданный ответ сервера.", 0);
+        return ERRUNEXPECTANSWER;   
+    }
     //Получаем код ошибки
     get_data(connection->sock, buf);
     if (buf[0] != '0')
     {
         chdir("../client_history");
         ui_show_error("Файл удален с сервера.", 0);
-        return 1;
+        return ERRENTITYNOTEXISTS;
     }
 	int file = open(rooms[room]->file_names[number], O_CREAT | O_WRONLY, PERMISSION);
+    if (file < 0)
+    {
+        chdir("../client_history");
+        ui_show_error("Ошибка создания файла.", 1);
+        return ERRENTITYNOTEXISTS;
+    }
 	long received_data = 0;
 	printf(	WHITE	"Получение файла %s\n"
 			GREEN	"[                    ]    %%", rooms[room]->file_names[number]);
@@ -351,10 +395,18 @@ int download_file_client(struct s_connection* connection, int room, int number)
 		get_data(connection->sock, buf);
 		int packet_size = atoi(buf);
 		get_ndata(connection->sock, buf, packet_size);
-		received_data += write(file, buf, packet_size);
+        int act_packet_size = write(file, buf, packet_size);
+        if (act_packet_size != packet_size)
+        {
+            ui_show_error("Ошибка записи в файл.", 1);
+            send_data(connection->sock, "0");
+            printf("\n");
+            break;
+        }
+        received_data += act_packet_size;
 		printf("[");
 		int percent = received_data * 100 / size;
-		for (int i=0; i < 20; i++)
+		for (int i = 0; i < 20; i++)
 		{
 			if (i < percent / 5)
 				printf("#");
@@ -368,6 +420,7 @@ int download_file_client(struct s_connection* connection, int room, int number)
     printf("Файл загружен.\n");
 	close(file);
 	chdir("../client_history");
+    return 0;
 }
 
 int send_file_client(struct s_connection* connection, int room, int file, char* filename)	
@@ -441,4 +494,23 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 	while (read_count == MAXBUFFER); 	//TODO - вставить проверку на ошибки
     printf("\n");
 	close(file);
+}
+
+void client_safe_exit()
+{
+    //Освобождение памяти
+    for (int i=0; i<MAXROOMS; i++)	
+		if (rooms[i] != NULL)
+		{
+            if (rooms[i]->fd != -1)
+                close(rooms[i]->fd);
+            for (int j=0; j < MAXROOMS; j++)
+				if (rooms[i]->file_names[j] == NULL)
+					free(rooms[i]->file_names[j]);
+			free(rooms[i]->name);
+			free(rooms[i]);
+		}
+    if (server_name != NULL)   
+        free(server_name);
+    exit(0);
 }

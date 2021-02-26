@@ -175,13 +175,13 @@ int server(struct s_connection* connection)
 		}	
 	}
 	//Освобождение памяти
-	for (int i=0; i<MAXROOMS; i++)	
+	for (int i = 0; i < MAXROOMS; i++)	
 		if (rooms[i] != NULL)
 		{
 			if (rooms[i]->fd != -1)
                 close(rooms[i]->fd);
 			for (int j=0; j < MAXROOMS; j++)
-				if (rooms[i]->file_names[j] == NULL)
+				if (rooms[i]->file_names[j] != NULL)
 					free(rooms[i]->file_names[j]);
 			free(rooms[i]->name);
 			free(rooms[i]);
@@ -494,22 +494,28 @@ void refresh_files_room(int room)	//Обновить список файлов, 
 	if (internal_directory != NULL)
 	{
 		struct dirent* internal_dir_ptr;
-		internal_dir_ptr=readdir(internal_directory);
+		internal_dir_ptr = readdir(internal_directory);
 		while (internal_dir_ptr!=NULL)	
 		{
 			if ((*internal_dir_ptr).d_name[0] != '.')	//Пропуск скрытых файлов
 			{
 				if (rooms[room]->file_count < MAXFILES - 1)
 				{
-					if (rooms[room]->file_names[rooms[room]->file_count] == NULL)
-						rooms[room]->file_names[rooms[room]->file_count] = malloc(sizeof(char)*MAXNICKLEN);	//Выделение памяти
-					strncpy(rooms[room]->file_names[rooms[room]->file_count], (*internal_dir_ptr).d_name, MAXNICKLEN);
-					rooms[room]->file_count++;
+					int max_dir_len = sizeof((*internal_dir_ptr).d_name) - 1;
+					(*internal_dir_ptr).d_name[max_dir_len] = '\0';
+					if (strlen((*internal_dir_ptr).d_name) < MAXNICKLEN)
+					{
+						printf("%s", (*internal_dir_ptr).d_name);
+						if (rooms[room]->file_names[rooms[room]->file_count] == NULL)
+							rooms[room]->file_names[rooms[room]->file_count] = malloc(sizeof(char)*MAXNICKLEN);	//Выделение памяти
+						strncpy(rooms[room]->file_names[rooms[room]->file_count], (*internal_dir_ptr).d_name, MAXNICKLEN);
+						rooms[room]->file_count++;
+					}
 				}
 				else
 					break;
 			}
-			internal_dir_ptr=readdir(internal_directory);
+			internal_dir_ptr = readdir(internal_directory);
 		}
 	}
 	closedir(internal_directory);

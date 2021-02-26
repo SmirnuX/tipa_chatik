@@ -15,24 +15,26 @@
 #include <dirent.h>
 #include <time.h>
 #include <sys/ioctl.h>
+#include <limits.h>
 
 //Константы
-#define PERMISSION 0666	//Разрешения для создаваемых файлов
-#define FOLDERPERMISSION 0777   //Разрешения для создаваемых папок
-#define MAXIPLEN 15 //Максимальная длина IP адреса
-#define MAXPORTLEN 5    //Максимальная длина порта
-#define MAXNICKLEN 64   //Максимальная длина никнейма
-#define MAXBUFFER 256   //Максимальный размер буфера (также максимальная длина сообщения)
-#define MAXROOMS 16 //Максимальное количество комнат (также максимальное количество открытых файлов)
-#define MAXFILES 16 //Максимальное количество файлов в комнате
-#define SIZEOF_MAXLENGTH 8 //Длина позиции в файле (т.е. максимальная длина файла - 10^16б > 95 Мб)
+#define PERMISSION 0666	                //Разрешения для создаваемых файлов
+#define FOLDERPERMISSION 0777           //Разрешения для создаваемых папок
+#define MAXIPLEN 15                     //Максимальная длина IP адреса
+#define MAXPORTLEN 5                    //Максимальная длина порта
+#define MAXNICKLEN 64                   //Максимальная длина никнейма
+#define MAXBUFFER 256                   //Максимальный размер буфера (также максимальная длина сообщения)
+#define MAXROOMS 16                     //Максимальное количество комнат (также максимальное количество открытых файлов)
+#define MAXFILES 16                     //Максимальное количество файлов в комнате
+#define SIZEOF_MAXLENGTH 8              //Длина позиции в файле (т.е. максимальная длина файла - 10^16б > 95 Мб)
 #define SIZEOF_MAXLENGTH_FORMAT "%08i"  //Формат для printf. 
-#define CMD_COUNT 7 //Количество команд, осуществляющих интерфейс клиент-сервер
-#define MAXCONNECTIONS 5    //Количество соединений, которые могут быть открыты одновременно
-#define MAXQUEUE 5  //Максимальное количество соединений в очереди
-#define TIMEOUT_S 0
-#define TIMEOUT_MS 400 //Частота опроса сокета в микросекундах
-#define MAXRECONNECTRIES 128
+#define CMD_COUNT 7                     //Количество команд, осуществляющих интерфейс клиент-сервер
+#define MAXCONNECTIONS 5                //Количество соединений, которые могут быть открыты одновременно
+#define MAXQUEUE 5                      //Максимальное количество соединений в очереди
+#define TIMEOUT_S 0                     //Частота опроса сокета в секундах
+#define TIMEOUT_MS 400                  //Частота опроса сокета в микросекундах
+#define MAXRECONNECTRIES 64             //Максимальное количество попыток переподключения
+#define MAXFILESIZE LONG_MAX            //Максимальный размер файла
 
 //Файлы конфигурации
 #define server_config "configs/serverconfig"
@@ -49,8 +51,8 @@
 #define DIM "\033[2m"
 #define BLINK "\033[5m"
 
-#define clear() printf("\033[H\033[J"); //очистка экрана
-#define prev_line() printf("\033[1A"); //Поднять курсор на строку выше
+#define clear() printf("\033[H\033[J");     //Очистка экрана
+#define prev_line() printf("\033[1A");      //Поднять курсор на строку выше
 #define erase_line() printf("\r\033[K\r");  //Стереть строку
 
 //Количество строк в меню:
@@ -63,6 +65,11 @@
 #define RECONNECT_FRAMES 2
 #define RECONNECT_FRAMELEN 29
 #define FILESPERPAGE 10 //Количество файлов на одной странице
+
+//Коды ошибок
+#define ERRCONNCLOSED 1         //Соединение закрыто
+#define ERRUNEXPECTANSWER 2     //Получен ответ неправильного формата
+#define ERRENTITYNOTEXISTS 3    //Попытка обратиться к несуществующей сущности (файлу, комнате, etc)
 
 extern char reconnect_animation[RECONNECT_FRAMES][RECONNECT_FRAMELEN];
 
@@ -149,24 +156,25 @@ void rooms_sort();	//Сортировка списка комнат
 void rooms_swap(int a, int b);  //Обмен комнат под номерами a и b местами
 
 //Вспомогательные функции
+char* tipa_gets(char* dest, int max, int fd);  //Низкоуровневый аналог fgets
+void client_safe_exit();    //Выход из программы с очисткой памяти
 void refresh_files_room(int room);	//Обновить список файлов, хранящихся в комнате
 void remove_new_line(char* str); //Убирает последний символ новой строки (если есть)
 void erase_lines(int n);    //Перемещение курсора на n строк наверх (и удаление этих строк)
+int is_correct_name(char* str);  //Проверяет название комнаты на корректность (не должно начинаться с точки и соблюдать все правила именования файлов в ос)
 
 //Функции интерфейса
-int ui_show_error(char* error, int show_errno);
+int ui_show_error(char* error, int show_errno); //Вывод окна ошибки с текстом error. Если show_errno не равен нулю, также выведется сообщение об ошибке согласно errno.h
 
-int client_ui_select_room(char* server_name);
-int client_ui_select_action(int selected_room);
-int client_ui_send_message(int selected_room, struct s_connection* connection);
-int client_ui_send_file(int selected_room, struct s_connection* connection);
-int client_ui_download_files(struct s_connection* connection, int* selected_room);
-int client_ui_reconnect(int n);
+int client_ui_select_room(char* server_name);   //Меню выбора комнаты
+int client_ui_select_action(int selected_room); //Меню выбора действия
+int client_ui_send_message(int selected_room, struct s_connection* connection); //Меню ввода и отправки сообзения
+int client_ui_send_file(int selected_room, struct s_connection* connection);    //Меню выбора и отправки файла
+int client_ui_download_files(struct s_connection* connection, int* selected_room);  //Меню выбора и загрузки файла с сервера
+int client_ui_reconnect(int n); //Окно переподключения.
 
-int server_ui_main_menu();
-int server_ui_create_room();
-int server_ui_send_message();
-int server_ui_delete_room();
-int server_ui_view_files();
-
-int client_ui_reconnect(int n);
+int server_ui_main_menu();  //Основное меню сервера
+int server_ui_create_room();    //Меню создания комнаты
+int server_ui_send_message();   //Меню отправки сообщения
+int server_ui_delete_room();    //Меню удаления комнаты
+int server_ui_view_files(); //Меню просмотра загруженных файлов

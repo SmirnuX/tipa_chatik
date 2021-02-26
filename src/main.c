@@ -198,7 +198,6 @@ int main(int argc, char* argv[])
             running = 0;
         }  
     }
-    //TODO - вставить очистку памяти
     return 0;
 }
 
@@ -326,4 +325,43 @@ void remove_new_line(char* str) //Убирает последний символ
 {
     if (str[strlen(str)-1] == '\n')
         str[strlen(str)-1] = '\0';
+}
+
+int is_correct_name(char* str)  //Проверяет название комнаты на корректность (не должно начинаться с точки и соблюдать все правила именования файлов в ос)
+{
+    char restricted[] = "/\\?<>*|"; //Запрещенные символы в названии
+    if (str[0] == '.')
+        return 0;
+    for (int i = 0; i < strlen(str); i++)
+        for (int j = 0; j < strlen(restricted); j++)
+            if (str[i] == restricted[j])
+                return 0;
+    return 1;
+}
+
+char* tipa_gets(char* dest, int max, int fd)  //Низкоуровневый аналог fgets
+{
+    int read_count;
+    char tmp;
+    for(int i = 0; i < max; i++)
+    {
+        read_count = read(fd, &tmp, 1);
+        if (read_count < 0)
+        {
+            perror("tipa_gets error: ");
+            return NULL;
+        }
+        if (read_count == 0 || tmp == '\n')    //EOF
+        {
+            dest[i] = '\0';
+            return dest;
+        }
+        dest[i] = tmp;
+    }
+    dest[max-1] = '\0';
+    //Считывание остатка строки
+    do
+        read(fd, &tmp, 1);
+    while (read_count == 1 && tmp != '\n');
+    return dest;
 }

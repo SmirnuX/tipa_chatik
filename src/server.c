@@ -484,7 +484,6 @@ void refresh_files_room(int room)	//Обновить список файлов, 
 					(*internal_dir_ptr).d_name[max_dir_len] = '\0';
 					if (strlen((*internal_dir_ptr).d_name) < MAXNICKLEN)
 					{
-						printf("%s", (*internal_dir_ptr).d_name);
 						if (rooms[room]->file_names[rooms[room]->file_count] == NULL)
 							rooms[room]->file_names[rooms[room]->file_count] = malloc(sizeof(char)*MAXNICKLEN);	//Выделение памяти
 						strncpy(rooms[room]->file_names[rooms[room]->file_count], (*internal_dir_ptr).d_name, MAXNICKLEN);

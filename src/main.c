@@ -68,6 +68,7 @@ int main(int argc, char* argv[])
                 else
                 {
                     ui_show_error("Ошибка открытия файла конфигурации.", 1);
+                    close(sock);
                     return 1;
                 }
             }
@@ -364,4 +365,15 @@ char* tipa_gets(char* dest, int max, int fd)  //Низкоуровневый а�
         read(fd, &tmp, 1);
     while (read_count == 1 && tmp != '\n');
     return dest;
+}
+
+int mkchdir(char* path)
+{
+    if (chdir(path) != 0)
+    {
+        mkdir(path, FOLDERPERMISSION);
+        return chdir(path);
+    }
+    else
+        return 0;
 }

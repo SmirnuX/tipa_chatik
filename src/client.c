@@ -6,20 +6,10 @@ int client(struct s_connection* connection)
     int selected_room = -1; //Выбранная комната
     signal(SIGPIPE, SIG_IGN);	//Игнорируем ошибки при записи в сокет
 
-    if (chdir("client_history") == -1)  //Переход в папку, хранящую историю сообщений
+    if (mkchdir("client_history") == -1)  //Переход в папку, хранящую историю сообщений
     {
-        int error = 0;
-        if (errno == ENOENT)    //Если папка не существует
-        {
-            errno = 0;
-            mkdir("client_history", FOLDERPERMISSION);
-            chdir("client_history");
-        }
-        if (errno != 0) //Для всех остальных ошибок, либо при ошибке при создании папки
-        {
-            ui_show_error("Ошибка открытия папки \"client_history\".", 1);
-            return 0;
-        }
+        ui_show_error("Ошибка открытия папки \"client_history\".", 1);
+        return 0;
     }
     for (int i = 0; i < MAXROOMS; i++)
         rooms[i] = NULL;
@@ -103,7 +93,7 @@ int client(struct s_connection* connection)
             if (rooms[i]->fd != -1)
                 close(rooms[i]->fd);
             for (int j=0; j < MAXROOMS; j++)
-				if (rooms[i]->file_names[j] == NULL)
+				if (rooms[i]->file_names[j] != NULL)
 					free(rooms[i]->file_names[j]);
 			free(rooms[i]->name);
 			free(rooms[i]);
@@ -116,8 +106,7 @@ int client(struct s_connection* connection)
 int get_rooms_client(struct s_connection* connection) //Получение списка комнат от сервера через соединение connection. В процессе выделяется память, которая должна быть очищена! (rooms[i])
 {
     char buf[MAXBUFFER];
-    strncpy(buf, "/getrooms", MAXBUFFER);
-    send_data_safe(connection, buf);
+    send_data_safe(connection, "/getrooms");
     server_time = atoi(get_data(connection->sock, buf)); //Получение "версии" сервера
     send_data_safe(connection, "1");
     int count = atoi(get_data(connection->sock, buf));
@@ -142,8 +131,7 @@ int get_rooms_client(struct s_connection* connection) //Получение сп�
 int send_message_client(struct s_connection* connection, int room, char* nickname, char* message)    //Отправка сообщения message на сервер через соединение connection в комнату под номером room пользователем nickname
 {
     char buf[MAXBUFFER];
-    strncpy(buf, "/sendmessage", MAXBUFFER);
-    send_data_safe(connection, buf);
+    send_data_safe(connection, "/sendmessage");
     if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
@@ -165,8 +153,7 @@ int send_message_client(struct s_connection* connection, int room, char* nicknam
 int get_new_messages_client(struct s_connection* connection, int room, int count)  //Получение недостающих сообщений через соединение connection для комнаты под номером room, в которой на данный момент сохранено count сообщений
 {
     char buf[MAXBUFFER];   
-    strncpy(buf, "/getnewmessages", MAXBUFFER);
-    send_data_safe(connection, buf);
+    send_data_safe(connection, "/getnewmessages");
     if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
@@ -198,8 +185,7 @@ int get_new_messages_client(struct s_connection* connection, int room, int count
 char* get_name_client(struct s_connection* connection)  //Получение наименования сервера через соединение connection. В процессе выделяется память, которая должна быть очищена! (возвращаемое значение)
 {
     char buf[MAXBUFFER];
-    strncpy(buf, "/getname", MAXBUFFER);
-    send_data_safe(connection, buf);
+    send_data_safe(connection, "/getname");
     get_data(connection->sock, buf); //Получение "версии" сервера - в этой команде не используется
     send_data_safe(connection, "1");
     get_data(connection->sock, buf);
@@ -280,13 +266,10 @@ char* get_ndata(int socket, char* str, int n)    //Прием сообщения
     return str;
 }
 
-
-
 int get_files_client(struct s_connection* connection, int room, int page)  //Получение списка файлов комнаты
 {
     char buf[MAXBUFFER];   
-    strncpy(buf, "/getfiles", MAXBUFFER);
-    if (send_data_safe(connection, buf) != 0)
+    if (send_data_safe(connection, "/getfiles") != 0)
         return ERRCONNCLOSED;
     if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
@@ -311,18 +294,19 @@ int get_files_client(struct s_connection* connection, int room, int page)  //П�
         return ERRUNEXPECTANSWER;   
     }
     rooms[room]->file_count = count;
-    if (count == 0)
-        return 0;
-    //Получение списка файлов
-	for (int i = (page-1)*10; i < page*10; i++)
-	{	
-		if (i >= count)
-			break;
-        get_data(connection->sock, buf);
-        if (rooms[room]->file_names[i] == NULL)
-            rooms[room]->file_names[i] = malloc(sizeof(char)*MAXNICKLEN);
-	    strncpy(rooms[room]->file_names[i], buf, MAXNICKLEN);
-	}
+    if (count != 0)
+    {
+        //Получение списка файлов
+        for (int i = (page-1)*10; i < page*10; i++)
+        {	
+            if (i >= count)
+                break;
+            get_data(connection->sock, buf);
+            if (rooms[room]->file_names[i] == NULL)
+                rooms[room]->file_names[i] = malloc(sizeof(char)*MAXNICKLEN);
+            strncpy(rooms[room]->file_names[i], buf, MAXNICKLEN);
+        }
+    }
     //Очистка памяти
     for (int i = count; i < MAXFILES; i++)
         if (rooms[room]->file_names[i] != NULL) 
@@ -338,9 +322,8 @@ int get_files_client(struct s_connection* connection, int room, int page)  //П�
 int download_file_client(struct s_connection* connection, int room, int number)
 {
 	//Загрузка файла с сервера. Синтаксис: /downloadfile <room> <number>
-    char buf[MAXBUFFER];   
-    strncpy(buf, "/downloadfile", MAXBUFFER);
-    if (send_data_safe(connection, buf) != 0)
+    char buf[MAXBUFFER];
+    if (send_data_safe(connection, "/downloadfile") != 0)
         return ERRCONNCLOSED;
     if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
@@ -357,15 +340,10 @@ int download_file_client(struct s_connection* connection, int room, int number)
     snprintf(buf, MAXBUFFER, "%i", number);
     if (send_data_safe(connection, buf) != 0)
         return ERRCONNCLOSED;
-	if (chdir("../downloads") < 0)
+	if (mkchdir("../downloads") < 0)
     {
-        chdir("..");
-        mkdir("downloads", FOLDERPERMISSION);
-        if (chdir("downloads") < 0)
-        {
-            ui_show_error("Не получается перейти в папку downloads.", 1);
-            return ERRCONNCLOSED;
-        }
+        ui_show_error("Не получается перейти в папку downloads.", 1);
+        return ERRCONNCLOSED;
     }
 	//Получение размера файла
     long size = atol(get_data(connection->sock, buf));
@@ -380,6 +358,12 @@ int download_file_client(struct s_connection* connection, int room, int number)
     {
         chdir("../client_history");
         ui_show_error("Файл удален с сервера.", 0);
+        for (int i = 0; i < MAXFILES; i++)
+            if (rooms[room]->file_names[i] == NULL)
+            {
+                free(rooms[room]->file_names[i]);
+		        rooms[room]->file_names[i] = NULL;
+            }
         return ERRENTITYNOTEXISTS;
     }
 	int file = open(rooms[room]->file_names[number], O_CREAT | O_WRONLY, PERMISSION);
@@ -430,8 +414,7 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 {
 	//Загрузка файла на сервер. Синтаксис: /sendfile <room> <nickname> <filename> <filesize>
 	char buf[MAXBUFFER]; 
-    strncpy(buf, "/sendfile", MAXBUFFER);
-    send_data_safe(connection, buf);
+    send_data_safe(connection, "/sendfile");
     if (atoi(get_data(connection->sock, buf)) != server_time) //Проверка "версии" сервера
     {
         send_data_safe(connection, "0");   //Информируем сервер о старой версии
@@ -442,11 +425,9 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
     snprintf(buf, MAXBUFFER, "%i", room);
     send_data_safe(connection, buf);
     //Отправка никнейма
-    strncpy(buf, nickname, MAXBUFFER);
-    send_data_safe(connection, buf);
+    send_data_safe(connection, nickname);
 	//Отправка названия файла
-    strncpy(buf, filename, MAXBUFFER);
-    send_data_safe(connection, buf);
+    send_data_safe(connection, filename);
     //Отправка размера файла
     struct stat stat_file;
 	fstat(file, &stat_file);	//Получаем размер файла

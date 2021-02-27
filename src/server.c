@@ -18,7 +18,7 @@ int server(struct s_connection* connection)
 			return 2;
 		}
 	}
-	chdir("server_history");	//Переходим в эту директорию
+	mkchdir("server_history");	//Переходим в эту директорию
 	struct dirent* dir_ptr;
 	struct stat stat_file;
 	dir_ptr=readdir(directory);
@@ -67,7 +67,6 @@ int server(struct s_connection* connection)
 	int running = 1;
     while (running)
     {
-		char buf[MAXBUFFER];
 		int n = 0;
 		ioctl(STDIN_FILENO, FIONREAD, &n);	//Считываем количество бит, которые можно прочитать
 		server_ui_main_menu();
@@ -95,7 +94,7 @@ int server(struct s_connection* connection)
 					server_ui_delete_room();
 					break;
 					case '0':
-					printf("Закрытие сервера...\n");
+					printf(DEFAULT "Закрытие сервера...\n");
 					running = 0;
 					break;
 				}	
@@ -146,6 +145,7 @@ int server(struct s_connection* connection)
 						ioctl(fd, FIONREAD, &n);	//Считываем количество бит, которые можно прочитать
 						if (n != 0)
 						{
+							char buf[MAXBUFFER];
 							//Считывание команды и ее выполнение
 							get_data(fd, buf);
 							//Идентификация команды
@@ -217,7 +217,9 @@ int send_message_server(int sock)	//Получение сообщения сер
 	int room = atoi(buf);
 	//Время получения сообщения сервером
 	time_t timer = time(NULL);
-	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
+	struct tm loc_time;
+	localtime_r(&timer, &loc_time);
+	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", &loc_time);
 	printf(DEFAULT BLUE"%s\n", s_time);
 	//Никнейм отправителя
 	get_data(sock, nickname);
@@ -332,8 +334,8 @@ int download_file_server(int sock)
 		send_data(sock, "-1");
 		return 0;
 	}
-	chdir(".files");	//TODO - вставить проверку на существование и создание
-	chdir(rooms[room]->name);
+	mkchdir(".files");
+	mkchdir(rooms[room]->name);
 	struct stat stat_file;
 	lstat(rooms[room]->file_names[number], &stat_file);	//Получаем размер файла
 	long size = stat_file.st_size;
@@ -389,22 +391,13 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
     //Получение комнаты
 	int room = atoi(get_data(sock, buf));
 	//Получение никнейма отправителя
-	get_data(sock, buf);
-	strncpy(nick, buf, MAXNICKLEN);
+	get_data(sock, nick);
     //Получение названия файла
     get_data(sock, buf);
 	strncpy(filename, buf, MAXNICKLEN);
 	long size = atol(get_data(sock, buf));
-	if (chdir(".files") == -1)
-	{
-		mkdir(".files", FOLDERPERMISSION);
-		chdir(".files");
-	}
-	if (chdir(rooms[room]->name) == -1)
-	{
-		mkdir(rooms[room]->name, FOLDERPERMISSION);
-		chdir(rooms[room]->name);
-	}
+	mkchdir(".files");
+	mkchdir(rooms[room]->name);
 	int error = 0;	//Код ошибки: 0 - ошибки нет, 1 - файл с таким названием уже есть, 2 - не хватает места в массиве, 3 - файл слишком большой
 	if (size > MAXFILESIZE)
 		error = 3;
@@ -464,32 +457,18 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 	chdir("../..");
 	char s_time[MAXBUFFER];
 	time_t timer = time(NULL);
-	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", localtime(&timer));
+	struct tm loc_time;
+	localtime_r(&timer, &loc_time);
+	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", &loc_time);
 	snprintf(buf, MAXBUFFER, GREEN"Отправлен " BRIGHT "%s\n" WHITE DEFAULT, filename);
 	write_message(rooms[room]->fd, s_time, nick, buf, ++(rooms[room]->msg_count));
 }
     
 void refresh_files_room(int room)	//Обновить список файлов, хранящихся в комнате
 {
-	if (chdir(".files") != 0)
-	{
-		if (errno == ENOENT)
-		{
-			mkdir(".files", FOLDERPERMISSION);
-			chdir(".files");
-			errno = 0;
-		}
-	}
+	mkchdir(".files");
 	DIR* internal_directory = opendir(rooms[room]->name);
-	if (chdir(rooms[room]->name) != 0)
-	{
-		if (errno == ENOENT)
-		{
-			mkdir(rooms[room]->name, FOLDERPERMISSION);
-			chdir(rooms[room]->name);
-			errno = 0;
-		}
-	}
+	mkchdir(rooms[room]->name);
 	rooms[room]->file_count = 0;
 	if (internal_directory != NULL)
 	{
@@ -517,8 +496,8 @@ void refresh_files_room(int room)	//Обновить список файлов, 
 			}
 			internal_dir_ptr = readdir(internal_directory);
 		}
+		closedir(internal_directory);
 	}
-	closedir(internal_directory);
 	for (int i = rooms[room]->file_count; i < MAXROOMS; i++)
 	{
 		free(rooms[room]->file_names[i]);

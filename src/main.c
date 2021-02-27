@@ -86,15 +86,13 @@ int main(int argc, char* argv[])
         }
         if (edit_config)    //Создание/редактирования файла конфигурации
         {
-            printf("\tВведите IP адрес, по которому будет производиться подключение\n>");    
-            __fpurge(stdin);  //Очистка буфера        
+            printf("\tВведите IP адрес, по которому будет производиться подключение\n>");           
             if (tipa_gets(ipaddr, MAXIPLEN, STDIN_FILENO) == NULL)
             {
                 ui_show_error("Ошибка ввода IP адреса.", 0);
                 continue;
             }
             remove_new_line(ipaddr);
-            __fpurge(stdin);  //Очистка буфера
             printf("\tВведите порт, по которому будет производиться подключение\n>");
             if (tipa_gets(port_str, MAXPORTLEN, STDIN_FILENO) == NULL)
             {
@@ -102,12 +100,11 @@ int main(int argc, char* argv[])
                 continue;
             }
             remove_new_line(port_str);
-            __fpurge(stdin);  //Очистка буфера
             if (is_server)
                 printf("\tВведите наименование сервера.\n>");
             else
                 printf("\tВведите никнейм.\n>");
-            if (fgets(nickname, MAXNICKLEN, STDIN_FILENO) == NULL)
+            if (tipa_gets(nickname, MAXNICKLEN, STDIN_FILENO) == NULL)
             {
                 ui_show_error("Ошибка ввода никнейма.", 0);
                 continue;

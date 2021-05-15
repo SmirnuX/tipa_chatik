@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: CPOL-1.02
+//TODO - убрать надпись о работе в прогрессе
 #include "main.h"
 char* server_name = NULL;
 int client(struct s_connection* connection)

@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -16,6 +17,8 @@
 #include <time.h>
 #include <sys/ioctl.h>
 #include <limits.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 //Константы
 #define PERMISSION 0666	                //Разрешения для создаваемых файлов
@@ -45,6 +48,7 @@
 #define GREEN "\033[32m"
 #define BLUE "\033[34m"
 #define WHITE "\033[37m"
+#define CYAN "\033[36"
 
 #define DEFAULT "\033[0m"
 #define BRIGHT "\033[1m"
@@ -61,6 +65,7 @@
 #define SERVER_CHOOSE_ROOM_LINES 6
 #define SERVER_WRITE_MESSAGE_LINES 4
 #define SERVER_VIEW_FILES_LINES 6
+#define CLIENT_ACTION_MENU 9
 #define CLIENT_RECONNECT_LINES 6
 #define RECONNECT_FRAMES 2
 #define RECONNECT_FRAMELEN 29
@@ -100,7 +105,9 @@ struct s_room
 
 //Основные функции
 int client(struct s_connection* connection);    
-int server(struct s_connection* connection);
+int server(struct s_connection* connection, struct s_connection* auto_connection);
+void client_update(void* void_connection);
+void client_thread_cleaner(void* args);
 
 //Сведения о комнатах
 extern struct s_room* rooms[MAXROOMS];	//Комнаты
@@ -111,6 +118,11 @@ extern long server_time;    //Время запуска сервера
 //Команды, выполняемые на сервере
 extern const char *server_cmd_strings[CMD_COUNT];  //Список команд
 extern int (*server_cmd_functions[CMD_COUNT])(int sock);  //Соответствующие им функции
+
+//Переменные для синхронизации потоков
+extern sem_t* thread_lock;
+extern int sel_room;
+extern char notifications_enable;
 
 //Клиентская часть команд
 int get_rooms_client(struct s_connection* connection);    //Получение списка комнат от сервера через соединение connection. В процессе выделяется память, которая должна быть очищена! (rooms[i])
@@ -173,6 +185,7 @@ int client_ui_send_message(int selected_room, struct s_connection* connection); 
 int client_ui_send_file(int selected_room, struct s_connection* connection);    //Меню выбора и отправки файла
 int client_ui_download_files(struct s_connection* connection, int* selected_room);  //Меню выбора и загрузки файла с сервера
 int client_ui_reconnect(int n); //Окно переподключения.
+void print_menu(int selected_room);
 
 int server_ui_main_menu();  //Основное меню сервера
 int server_ui_create_room();    //Меню создания комнаты

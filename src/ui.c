@@ -6,6 +6,20 @@ char reconnect_animation[RECONNECT_FRAMES][RECONNECT_FRAMELEN] = {
     "(╯°□°)╯︵ ┻━┻",
 };
 
+void print_menu(int selected_room)
+{
+    //===Меню выбора действия===
+    printf( WHITE BRIGHT "============================================================\n"
+    DEFAULT "\tДействия в \"%s\"\n"
+            "\t1. Написать сообщение\n"
+            "\t2. Обновить\n"
+            "\t3. Загрузить файл на сервер\n"
+            "\t4. Скачать файл с сервера\n"
+    BRIGHT  "\t0. Выйти из комнаты\n"
+            "============================================================\n"
+    DEFAULT "Введите номер выбранного действия: ", rooms[selected_room]->name);
+}
+
 
 int client_ui_download_files(struct s_connection* connection, int* selected_room)   //Загрузка файлов с сервера
 {
@@ -107,16 +121,13 @@ int client_ui_select_action(int selected_room)
     clear()
     read_messages(rooms[selected_room]->fd);
     //===Меню выбора действия===
-    printf( WHITE BRIGHT "============================================================\n"
-    DEFAULT "\tДействия в \"%s\"\n"
-            "\t1. Написать сообщение\n"
-            "\t2. Обновить\n"
-            "\t3. Загрузить файл на сервер\n"
-            "\t4. Скачать файл с сервера\n"
-    BRIGHT  "\t0. Выйти из комнаты\n"
-            "============================================================\n"
-    DEFAULT "Введите номер выбранного действия: ", rooms[selected_room]->name);
+    print_menu(selected_room);
+    sel_room = selected_room;
+    sem_post(thread_lock);
     char choice = getchar();
+    sem_wait(thread_lock);
+    if (sel_room == -1)
+        return 0;
     while (getchar() !='\n');   //Очистка буфера
     if (choice >= '0' && choice <='4')
         return choice - '0';
@@ -320,7 +331,14 @@ int server_ui_send_message()
                 strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", &loc_time);
                 buf[MAXBUFFER - 1] = '\0';
                 write_message(rooms[choice]->fd, s_time, nickname, buf, ++(rooms[choice]->msg_count));
+                struct s_message s_msg;
+                strncpy(s_msg.datetime, s_time, strlen(buf)+1);
+                strncpy(s_msg.nickname, nickname, strlen(buf)+1);
+                strncpy(s_msg.msg_text, buf, strlen(buf)+1);
+                
+
                 printf(	"\n Сообщение отправлено.\n");
+                //Рассылка сообщений
             }
         }
     }

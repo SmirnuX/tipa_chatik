@@ -24,7 +24,10 @@ long server_time;    //Время запуска сервера
 struct s_room* rooms[MAXROOMS];
 int room_count;	//Количество комнат
 char nickname[MAXNICKLEN];  //Наименование клиента/сервера
-
+sem_t* thread_lock; //Семафор, показывающий, происходит ли изменение интерфейся другим потоком
+enum MENUS menu;   //Количество строк в текущем меню
+char notifications_enable;   //Включены ли уведомления о новых сообщениях в других комнатах
+int sel_room;   //Выбранная в данный момент комната
 
 int main(int argc, char* argv[])
 {
@@ -50,6 +53,7 @@ int main(int argc, char* argv[])
     int edit_config = 0;
     int config;
     int sock;
+    int auto_sock;
     int running = 1;
 	while (running == 1)	{
         if (!edit_config)
@@ -152,22 +156,33 @@ int main(int argc, char* argv[])
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = inet_addr(ipaddr);
         address.sin_port = htons(port);
+        struct sockaddr_in auto_address;
+        auto_address.sin_family = AF_INET;
+        auto_address.sin_addr.s_addr = address.sin_addr.s_addr;
+        auto_address.sin_port = htons(port+1);  //TODO - добавить в описание, что должны быть свободны ДВА порта.
         int respond;
-
+        struct s_connection connection;
+        struct s_connection auto_connection;
         if (is_server == 0)
+        {
             respond = connect(sock, (struct sockaddr *) &address, sizeof(address));
+            respond |= connect(auto_sock, (struct sockaddr *) &auto_address, sizeof(auto_address));
+            auto_connection.sock = auto_sock;
+            auto_connection.address = (struct sockaddr *) &auto_address;
+        }
         else
         {
             fcntl(sock, F_SETFL, O_NONBLOCK);
             respond = bind(sock, (struct sockaddr *) &address, sizeof(address));
+            respond |= bind(auto_sock, (struct sockaddr *) &auto_address, sizoef(auto_address));
         }
-        struct s_connection connection;
         connection.sock = sock;
         connection.address = (struct sockaddr *) &address;
 
-
         if (respond == -1)
         {
+            close(sock);
+            close(auto_sock);
             perror( BRIGHT RED      "Ошибка подключения: ");
             printf( DEFAULT WHITE   "Выберите действие\n"
                             "1. Повторить попытку подключения\n"
@@ -188,13 +203,22 @@ int main(int argc, char* argv[])
             errno = 0;
         }
         else
-        { 
+        {  
             if (is_server == 0)
+            {
+                sem_init(thread_lock, 0, 0);    //TODO - ошибки. Инициализация семафора
+                sel_room = -1;
+                notifications_enable = 1;
+                pthread_t update_thread;
+                pthread_create(update_thread, NULL, client_update, (void*) &auto_connection);
                 client(&connection);
+                pthread_cancel(update_thread);
+                close(auto_connection.sock);
+            }
             else
-                server(&connection);
+                server(&connection, &auto_connection);
             running = 0;
-        }  
+        }         
     }
     return 0;
 }

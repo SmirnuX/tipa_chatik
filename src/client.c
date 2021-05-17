@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: CPOL-1.02
-//TODO - убрать надпись о работе в прогрессе
 #include "main.h"
 char* server_name = NULL;
 int client(struct s_connection* connection)
@@ -317,8 +316,6 @@ int get_files_client(struct s_connection* connection, int room, int page)  //П�
         }
 	return 0;
 }
-
-//TODO - сделать автоматическое обновление чата
 
 int download_file_client(struct s_connection* connection, int room, int number)
 {

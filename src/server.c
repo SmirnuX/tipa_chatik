@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CPOL-1.02
 #include "main.h"
 
-int server(struct s_connection* connection)
+int server(struct s_connection* connection, struct s_connection* auto_connection)
 {
 	//signal(SIGPIPE, SIG_DFL);
     room_count = 0;
@@ -56,9 +56,12 @@ int server(struct s_connection* connection)
 	closedir(directory);
 	//Подготовка списка соединений
 	fd_set connections_set;	//Набор файловых дескрипторов соединений
+	fd_set auto_connections_set;	//Набор файловых дескрипторов для автообновления
 	fd_set temp_connections_set;	//Временный набор дескрипторов	
 	FD_ZERO(&connections_set);	//Обнуление набора
+	FD_ZERO(&auto_connections_set);
 	FD_SET(connection->sock, &connections_set);
+	FD_SET(auto_connection->sock, &auto_connections_set);
 	int maxfd = connection->sock + 1;
 	struct timeval timeout;
     listen(connection->sock, MAXQUEUE);

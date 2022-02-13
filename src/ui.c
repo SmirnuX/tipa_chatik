@@ -156,8 +156,10 @@ int client_ui_send_message(int selected_room, struct s_connection* connection)
 int client_ui_send_file(int selected_room, struct s_connection* connection)
 {
     char buf[MAXBUFFER];
-    chdir("..");
-    getcwd(buf, MAXBUFFER);
+    if (chdir("..") != 0)
+        ui_show_error("Ошибка перемещения по директориям.", ENOENT);
+    if (getcwd(buf, MAXBUFFER) == NULL)
+        ui_show_error("Ошибка перемещения по директориям.", errno);
     printf( 
     WHITE BRIGHT"=======================================================================\n"
     DEFAULT     "\tВведите путь к загружаемому файлу и ENTER для отправки файла\n"
@@ -175,18 +177,21 @@ int client_ui_send_file(int selected_room, struct s_connection* connection)
                 clear()
                 ui_show_error("Ошибка открытия файла.", 1);
                 errno = 0;
-                chdir("client_history");
+                if (chdir("client_history") != 0)
+                    ui_show_error("Ошибка перемещения по директориям.", ENOENT);
                 return -1;
             }
             else if (send_file_client(connection, selected_room, file, buf) == ECONNREFUSED)
             {
                 clear()
                 printf ("Произошли изменения на сервере. Переподключение...\n\n");
-                chdir("client_history");
+                if (chdir("client_history") != 0)
+                    ui_show_error("Ошибка перемещения по директориям.", ENOENT);
                 return -1;
             }
         }
-    chdir("client_history");
+    if (chdir("client_history") != 0)
+        ui_show_error("Ошибка перемещения по директориям.", ENOENT);
     return 0;
 }
 
@@ -203,6 +208,7 @@ int ui_show_error(char* error, int show_errno)  //Вывод окна ошибк
     WHITE DEFAULT);
     while (getchar() != '\n');
     clear()
+    return show_errno;
 }
 
 int server_ui_main_menu()
@@ -217,6 +223,7 @@ int server_ui_main_menu()
             BRIGHT	"0. Закрыть сервер\n"
                     "============================================================\n" DEFAULT DIM);
     erase_lines(SERVER_MENU_LINES);
+    return 0;
 }
 
 int server_ui_create_room()
@@ -280,6 +287,7 @@ int server_ui_create_room()
             }
         }
     }
+    return 0;
 }
 
 int server_ui_send_message()
@@ -324,6 +332,7 @@ int server_ui_send_message()
             }
         }
     }
+    return 0;
 }
 
 int server_ui_delete_room()
@@ -363,6 +372,7 @@ int server_ui_delete_room()
             room_count--;
         }
     }
+    return 0;
 }
 
 int server_ui_view_files()
@@ -426,6 +436,7 @@ int server_ui_view_files()
             } 
         }
     }
+    return 0;
 }
 
 int client_ui_reconnect(int n)

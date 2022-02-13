@@ -7,3 +7,6 @@ all:
 sanitized: 
 	cppcheck --enable=all --inconclusive --std=posix ./src/*
 	gcc $(objects) -o $(output) -fsanitize=address
+
+warnings:
+	gcc $(objects) -o $(output) -O2 -Wall -Wextra -Wno-sign-compare

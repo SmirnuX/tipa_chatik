@@ -1,20 +1,30 @@
-# Типа чатик
-_Даже немного напоминает нормальный чат_
+# Tipa chatik
+_Almost like normal chat_
 
-## Особенности
- - Можно писать сообщения
- - Можно их даже читать
- - Можно отправлять файлы
- - И даже можно их скачивать
- - Файлы конфигурации позволят не вводить данные раз за разом
- - и прочие инновации
+<img src="thumbnail.png" alt="Screenshot of Wiki Cross" width="200"/>
 
- ## Использование
- Запуск сервера:
+## Features
+ - You can send messages
+ - And you can read
+ - You can upload files
+ - And even download
+ - and a lot of other very useful and *unique* features!
+
+ ## Usage
+ ### Compiling
+```sh
+make
+```
+ ### Launching server
 ```sh
 ./tchat -s
 ```
- Запуск клиента:
+ ### Launching client
  ```sh
 ./tchat
 ```
+ For chatting on one computer between different VMs tests were performed with this config:
+ ```sh
+        IP: 127.0.0.1
+        Port: 6463
+ ```

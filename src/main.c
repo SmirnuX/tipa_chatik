@@ -137,11 +137,15 @@ int main(int argc, char* argv[])
                 return 1;
             }
             //Запись строк в файл
-            write(config, ipaddr, strlen(ipaddr));
-            write(config, "\n", sizeof(char));
-            write(config, port_str, strlen(port_str));
-            write(config, "\n", sizeof(char));
-            write(config, nickname, strlen(nickname));
+            if (write(config, ipaddr, strlen(ipaddr)) <= 0 ||
+                write(config, "\n", sizeof(char)) <= 0 ||
+                write(config, port_str, strlen(port_str)) <= 0 ||
+                write(config, "\n", sizeof(char)) <= 0 ||
+                write(config, nickname, strlen(nickname)) <= 0)
+            {
+                ui_show_error("Ошибка записи в файл конфигурации.", 1);
+                return 1;
+            }
             close(config);
             edit_config = 0;
         }
@@ -231,11 +235,12 @@ int get_string(char *buf, int maxlen, int fd)   //Получение строк�
 int goto_message(int room, int count)	//Перемещение позиции в файле к count сообщению с конца
 {
 	char buf[MAXBUFFER];
-    long pos;
+    long pos = 0;
 	lseek(room, -SIZEOF_MAXLENGTH, SEEK_END); //Чтение позиции последнего сообщения
 	for (int i = 0; i < count; i++)
 	{
-		read(room, buf, SIZEOF_MAXLENGTH);
+		if (read(room, buf, SIZEOF_MAXLENGTH) != SIZEOF_MAXLENGTH)
+            return -1;
 		buf[SIZEOF_MAXLENGTH] = '\0';
 		int offset = atoi(buf);
 		if (offset < 0)
@@ -246,6 +251,7 @@ int goto_message(int room, int count)	//Перемещение позиции в
 	}
     if (pos > 0)
 	    lseek(room, SIZEOF_MAXLENGTH, SEEK_CUR);
+    return 0;
 }
 
 int read_messages(int room)	//Вывод всех сообщений из файла, соответствующего комнате под номером room, начиная с установленной ранее позиции в файле
@@ -311,12 +317,19 @@ int write_message(int room, char* datetime, char* nickname, char* msg, int numbe
 	char buf[MAXBUFFER];
 	int pos = lseek(room, 0, SEEK_END);
 	snprintf(buf, MAXBUFFER, "%i", number);
-	write(room, buf, strlen(buf)+1);
-	write(room, datetime, strlen(datetime)+1);
-	write(room, nickname, strlen(nickname)+1);
-	write(room, msg, strlen(msg)+1);
+    if(
+        write(room, buf, strlen(buf)+1) != strlen(buf)+1 ||
+        write(room, datetime, strlen(datetime)+1) != strlen(datetime)+1 ||
+        write(room, nickname, strlen(nickname)+1) != strlen(nickname)+1 ||
+        write(room, msg, strlen(msg)+1) != strlen(msg)+1
+    )
+    {
+        return -1;
+    }
 	snprintf(buf, MAXBUFFER, SIZEOF_MAXLENGTH_FORMAT, pos - SIZEOF_MAXLENGTH);
-	write(room, buf, SIZEOF_MAXLENGTH);
+    if (write(room, buf, SIZEOF_MAXLENGTH) != SIZEOF_MAXLENGTH)
+        return -1;
+    return 0;
 }
 
 void remove_new_line(char* str) //Убирает последний символ новой строки (если есть)
@@ -330,8 +343,8 @@ int is_correct_name(char* str)  //Проверяет название комна
     char restricted[] = "/\\?<>*|"; //Запрещенные символы в названии
     if (str[0] == '.')
         return 0;
-    for (int i = 0; i < strlen(str); i++)
-        for (int j = 0; j < strlen(restricted); j++)
+    for (uint i = 0; i < strlen(str); i++)
+        for (uint j = 0; j < strlen(restricted); j++)
             if (str[i] == restricted[j])
                 return 0;
     return 1;
@@ -339,7 +352,7 @@ int is_correct_name(char* str)  //Проверяет название комна
 
 char* tipa_gets(char* dest, int max, int fd)  //Низкоуровневый аналог fgets
 {
-    int read_count;
+    int read_count = -1;
     char tmp;
     for(int i = 0; i < max; i++)
     {
@@ -359,7 +372,7 @@ char* tipa_gets(char* dest, int max, int fd)  //Низкоуровневый а�
     dest[max-1] = '\0';
     //Считывание остатка строки
     do
-        read(fd, &tmp, 1);
+        read_count = read(fd, &tmp, 1);
     while (read_count == 1 && tmp != '\n');
     return dest;
 }

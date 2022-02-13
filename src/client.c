@@ -56,8 +56,8 @@ int client(struct s_connection* connection)
                 continue;
             }
             int choice = client_ui_select_action(selected_room);    //Вывод истории сообщений и меню выбора действий
-            int error;
-            char buf[MAXBUFFER];    
+            // int error;
+            // char buf[MAXBUFFER];    
             switch (choice)
             {
                 case 0:   //Возвращение к списку комнат
@@ -235,7 +235,6 @@ int send_ndata_safe(struct s_connection* connection, char* str, int n)  //Отп
 char* get_data(int socket, char* str)    //Прием произвольного сообщения
 {
     int i;
-    char temp;
     for (i=0; i<MAXBUFFER; i++)
     {  
         int j = read(socket, str+i, 1); 
@@ -253,7 +252,6 @@ char* get_data(int socket, char* str)    //Прием произвольного
 char* get_ndata(int socket, char* str, int n)    //Прием сообщения размером n. В случае неудачи записывает в конце принятой части сообщения \0
 {
     int i;
-    char temp;
     for (i=0; i<n; i++)
     {  
         int j = read(socket, str+i, 1); 
@@ -309,11 +307,13 @@ int get_files_client(struct s_connection* connection, int room, int page)  //П�
     }
     //Очистка памяти
     for (int i = count; i < MAXFILES; i++)
+    {
         if (rooms[room]->file_names[i] != NULL) 
         {
             free(rooms[room]->file_names[i]);
             rooms[room]->file_names[i] = NULL;
         }
+    }
 	return 0;
 }
 
@@ -339,7 +339,9 @@ int download_file_client(struct s_connection* connection, int room, int number)
     //Отправка номера страницы
     snprintf(buf, MAXBUFFER, "%i", number);
     if (send_data_safe(connection, buf) != 0)
+    {
         return ERRCONNCLOSED;
+    }
 	if (mkchdir("../downloads") < 0)
     {
         ui_show_error("Не получается перейти в папку downloads.", 1);
@@ -356,7 +358,10 @@ int download_file_client(struct s_connection* connection, int room, int number)
     get_data(connection->sock, buf);
     if (buf[0] != '0')
     {
-        chdir("../client_history");
+        if (chdir("../client_history") != 0)
+        {
+            ui_show_error("Ошибка перехода по директориям.", ENOENT);
+        }
         ui_show_error("Файл удален с сервера.", 0);
         for (int i = 0; i < MAXFILES; i++)
             if (rooms[room]->file_names[i] == NULL)
@@ -369,7 +374,10 @@ int download_file_client(struct s_connection* connection, int room, int number)
 	int file = open(rooms[room]->file_names[number], O_CREAT | O_WRONLY, PERMISSION);
     if (file < 0)
     {
-        chdir("../client_history");
+        if (chdir("../client_history") != 0)
+        {
+            ui_show_error("Ошибка перехода по директориям.", ENOENT);
+        }
         ui_show_error("Ошибка создания файла.", 1);
         return ERRENTITYNOTEXISTS;
     }
@@ -406,7 +414,10 @@ int download_file_client(struct s_connection* connection, int room, int number)
     erase_line()
     printf("Файл загружен.\n");
 	close(file);
-	chdir("../client_history");
+    if (chdir("../client_history") != 0)
+        {
+            ui_show_error("Ошибка перехода по директориям.", ENOENT);
+        }
     return 0;
 }
 
@@ -481,6 +492,7 @@ int send_file_client(struct s_connection* connection, int room, int file, char* 
 	while (read_count == MAXBUFFER); 	
     printf("\n");
 	close(file);
+    return 0;
 }
 
 void client_safe_exit()

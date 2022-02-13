@@ -124,7 +124,7 @@ int server(struct s_connection* connection)
 						errno = 0;
 						int client_socket;
 						struct sockaddr_in client_address;
-						int len = sizeof(client_address);
+						uint len = sizeof(client_address);
 						client_socket = accept(connection->sock, (struct sockaddr*) &client_address, &len);
 						if (errno == EAGAIN)
 						{
@@ -199,6 +199,7 @@ int get_rooms_server(int sock)	//Отправка списка комнат че
 		strncpy(buf, rooms[i]->name, MAXNICKLEN);
 		send_data(sock, buf);	//Отправка названий комнат
 	}
+    return 0;
 }
 
 int get_name_server(int sock)  //Отправка наименования сервера клиенту через сокет sock
@@ -228,6 +229,7 @@ int send_message_server(int sock)	//Получение сообщения сер
 	get_data(sock, buf);
 	printf(DEFAULT"%s\n", buf);
 	write_message(rooms[room]->fd, s_time, nickname, buf, ++(rooms[room]->msg_count));
+    return 0;
 }
 
 int get_new_messages_server(int sock)	//Отправка недостаюших сообщений клиенту через сокет sock
@@ -344,7 +346,10 @@ int download_file_server(int sock)
 	int file = open(rooms[room]->file_names[number], O_RDONLY);
 	if (file < 0)
 	{
-		chdir("../..");
+        if (chdir("../..") != 0)
+		{
+		ui_show_error("Ошибка перехода по директориям.", ENOENT);
+		}
 		send_data(sock, "1");
 		refresh_files_room(room);
 		return -1;
@@ -361,7 +366,8 @@ int download_file_server(int sock)
 		char packet_size_str[MAXBUFFER];
         snprintf(packet_size_str, MAXBUFFER, "%i", read_count);
         send_data(sock, packet_size_str);
-        write(sock, buf, read_count);
+        if (write(sock, buf, read_count) != read_count)
+            return -1;
 		sent_data += read_count;
 		printf("[");
 		int percent = sent_data * 100 / size;
@@ -379,7 +385,11 @@ int download_file_server(int sock)
 	erase_line()
 	printf("Файл отправлен.\n");
 	close(file);
-	chdir("../..");
+    if (chdir("../..") != 0)
+    {
+    ui_show_error("Ошибка перехода по директориям.", ENOENT);
+    }
+    return 0;
 }
 
 int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
@@ -423,7 +433,10 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 	send_data(sock, buf);
 	if (error != 0)
 	{
-		chdir("../..");
+		if (chdir("../..") != 0)
+		{
+		    ui_show_error("Ошибка перехода по директориям.", ENOENT);
+		}
 		return 1;
 	}
 	int file = open(filename, O_CREAT | O_WRONLY, PERMISSION);
@@ -454,7 +467,8 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 	erase_line()
 	printf("Файл получен.\n");
 	close(file);
-	chdir("../..");
+	if (chdir("../..") != 0)
+		ui_show_error("Ошибка перехода по директориям.", ENOENT);
 	char s_time[MAXBUFFER];
 	time_t timer = time(NULL);
 	struct tm loc_time;
@@ -462,6 +476,7 @@ int send_file_server(int sock)	//ВЫДЕЛЕНИЕ ПАМЯТИ
 	strftime(s_time, MAXBUFFER, "%H:%M %d.%m.%Y ", &loc_time);
 	snprintf(buf, MAXBUFFER, GREEN"Отправлен " BRIGHT "%s\n" WHITE DEFAULT, filename);
 	write_message(rooms[room]->fd, s_time, nick, buf, ++(rooms[room]->msg_count));
+	return 0;
 }
     
 void refresh_files_room(int room)	//Обновить список файлов, хранящихся в комнате
@@ -502,5 +517,6 @@ void refresh_files_room(int room)	//Обновить список файлов, 
 		free(rooms[room]->file_names[i]);
 		rooms[room]->file_names[i] = NULL;
 	}
-	chdir("../..");
+	if (chdir("../..") != 0)
+		ui_show_error("Ошибка перемещения по директориям.", ENOENT);
 }
